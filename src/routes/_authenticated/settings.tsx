@@ -8,12 +8,9 @@ import { Label } from "@/components/ui/label";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { RequireRole } from "@/components/RequireRole";
-import {
-  useSettings,
-  type DayKey,
-  type SettingsPatch,
-} from "@/hooks/useSettings";
+import { useSettings, type DayKey, type SettingsPatch } from "@/hooks/useSettings";
 import { ApiError, NetworkError } from "@/lib/api";
+import { isValidHoursPair } from "@/lib/schedule";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: () => (
@@ -34,8 +31,7 @@ const DAYS: { key: DayKey; label: string }[] = [
 ];
 
 // Default pause message if admin leaves the textarea blank
-const DEFAULT_PAUSE_MESSAGE =
-  "We're temporarily not accepting orders. Please try again soon.";
+const DEFAULT_PAUSE_MESSAGE = "We're temporarily not accepting orders. Please try again soon.";
 
 type FormState = {
   deliveryFeeEuros: string; // form value, converted to cents on save
@@ -81,16 +77,10 @@ function SettingsPage() {
   }
 
   if (loadError) {
-    return (
-      <div className="text-center py-20 text-destructive">{loadError}</div>
-    );
+    return <div className="text-center py-20 text-destructive">{loadError}</div>;
   }
 
-  const setHour = (
-    day: DayKey,
-    field: "open" | "close" | "closed",
-    value: string | boolean,
-  ) => {
+  const setHour = (day: DayKey, field: "open" | "close" | "closed", value: string | boolean) => {
     setForm((prev) => {
       if (!prev) return prev;
       return {
@@ -129,14 +119,10 @@ function SettingsPage() {
         patch[`${key}Open` as keyof SettingsPatch] = null as never;
         patch[`${key}Close` as keyof SettingsPatch] = null as never;
       } else {
-        if (!/^\d{2}:\d{2}$/.test(h.open) || !/^\d{2}:\d{2}$/.test(h.close)) {
-          setFormError(`${label}: times must be HH:MM (24h).`);
-          return;
-        }
-        const [oh, om] = h.open.split(":").map(Number);
-        const [ch, cm] = h.close.split(":").map(Number);
-        if (oh * 60 + om >= ch * 60 + cm) {
-          setFormError(`${label}: closing time must be after opening time.`);
+        if (!isValidHoursPair(h.open, h.close)) {
+          setFormError(
+            `${label}: enter two different valid times in HH:MM format. Overnight hours are allowed.`,
+          );
           return;
         }
         patch[`${key}Open` as keyof SettingsPatch] = h.open as never;
@@ -185,14 +171,13 @@ function SettingsPage() {
           <div>
             <h2 className="text-lg font-semibold">Pause new orders</h2>
             <p className="text-sm text-muted-foreground mt-1">
-              When paused, customers see a message and can't place orders. Use this when you're slammed.
+              When paused, customers see a message and can't place orders. Use this when you're
+              slammed.
             </p>
           </div>
           <Switch
             checked={form.isPaused}
-            onCheckedChange={(v) =>
-              setForm((prev) => (prev ? { ...prev, isPaused: v } : prev))
-            }
+            onCheckedChange={(v) => setForm((prev) => (prev ? { ...prev, isPaused: v } : prev))}
           />
         </div>
 
@@ -232,9 +217,7 @@ function SettingsPage() {
             max="100"
             value={form.deliveryFeeEuros}
             onChange={(e) =>
-              setForm((prev) =>
-                prev ? { ...prev, deliveryFeeEuros: e.target.value } : prev,
-              )
+              setForm((prev) => (prev ? { ...prev, deliveryFeeEuros: e.target.value } : prev))
             }
           />
           <span className="text-sm text-muted-foreground">€</span>
@@ -246,7 +229,8 @@ function SettingsPage() {
         <div>
           <h2 className="text-lg font-semibold">Opening hours</h2>
           <p className="text-sm text-muted-foreground mt-1">
-            Outside these hours, customers see a "closed" banner and can't order.
+            Outside these hours, customers see a "closed" banner and can't order. A closing time
+            earlier than opening means service continues overnight.
           </p>
         </div>
 
