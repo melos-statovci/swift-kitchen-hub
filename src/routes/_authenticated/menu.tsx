@@ -25,7 +25,11 @@ import { RequireRole } from "@/components/RequireRole";
 import { MenuFormDialog } from "@/components/admin/MenuFormDialog";
 import { DeleteMenuItemDialog } from "@/components/admin/DeleteMenuItemDialog";
 import { CategoryManager } from "@/components/admin/CategoryManager";
-import { useMenuItems, type CreateMenuItemInput } from "@/hooks/useMenuItems";
+import {
+  useMenuItems,
+  type CreateMenuItemInput,
+  type SaveVariantInput,
+} from "@/hooks/useMenuItems";
 import { useCategories } from "@/hooks/useCategories";
 import { formatCurrency } from "@/lib/format";
 import type { MenuItem } from "@/lib/types";
@@ -51,10 +55,8 @@ function MenuDashboard() {
     loadError,
     createMenuItem,
     updateMenuItem,
+    patchMenuItem,
     deleteMenuItem,
-    createVariant,
-    updateVariant,
-    deleteVariant,
   } = useMenuItems();
   const {
     categories,
@@ -93,21 +95,26 @@ function MenuDashboard() {
 
   const close = () => setDialog({ kind: "none" });
 
-  const handleCreate = async (values: CreateMenuItemInput) => {
-    const created = await createMenuItem(values);
+  const handleCreate = async (values: CreateMenuItemInput, variants: SaveVariantInput[]) => {
+    const created = await createMenuItem(values, variants);
     toast.success(`Added ${created.name}`);
     return created;
   };
 
-  const handleUpdate = async (id: string, values: CreateMenuItemInput) => {
-    const updated = await updateMenuItem(id, values);
+  const handleUpdate = async (
+    id: string,
+    values: CreateMenuItemInput,
+    variants: SaveVariantInput[],
+    expectedUpdatedAt: string,
+  ) => {
+    const updated = await updateMenuItem(id, values, variants, expectedUpdatedAt);
     toast.success("Menu item updated");
     return updated;
   };
 
   const handleToggleAvailable = async (item: MenuItem) => {
     try {
-      await updateMenuItem(item.id, { available: !item.available });
+      await patchMenuItem(item.id, { available: !item.available });
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update availability");
     }
@@ -276,9 +283,6 @@ function MenuDashboard() {
         categories={categories}
         onCreate={handleCreate}
         onUpdate={handleUpdate}
-        onCreateVariant={createVariant}
-        onUpdateVariant={updateVariant}
-        onDeleteVariant={deleteVariant}
       />
       <DeleteMenuItemDialog
         open={dialog.kind === "delete"}

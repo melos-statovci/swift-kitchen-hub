@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from "react";
-import type { MenuItem, MenuItemVariant } from "@/lib/types";
+import type { MenuItem } from "@/lib/types";
 import { apiFetch, ApiError, NetworkError } from "@/lib/api";
 
 export type CreateMenuItemInput = {
@@ -14,21 +14,16 @@ export type CreateMenuItemInput = {
 
 export type UpdateMenuItemPatch = Partial<CreateMenuItemInput>;
 
-export type CreateVariantInput = {
+export type SaveVariantInput = {
+  id?: string;
   name: string;
   price: number;
   sortOrder: number;
   available: boolean;
 };
 
-export type UpdateVariantPatch = Partial<CreateVariantInput>;
-
 type MenuListResponse = { items: MenuItem[] };
 type MenuItemResponse = { item: MenuItem };
-type VariantResponse = { variant: MenuItemVariant };
-
-const sortVariants = (variants: MenuItemVariant[]) =>
-  [...variants].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name));
 
 /**
  * Admin menu management. Mirrors useUsers(): initial fetch of the full
@@ -80,33 +75,49 @@ export function useMenuItems() {
     [items],
   );
 
-  const createMenuItem = useCallback(async (input: CreateMenuItemInput): Promise<MenuItem> => {
-    const data = await apiFetch<MenuItemResponse>("/api/menu", {
-      method: "POST",
-      auth: true,
-      body: input,
-    });
-    const item = { ...data.item, variants: data.item.variants ?? [] };
-    setItems((prev) => [...prev, item]);
-    return item;
-  }, []);
+  const createMenuItem = useCallback(
+    async (input: CreateMenuItemInput, variants: SaveVariantInput[]): Promise<MenuItem> => {
+      const data = await apiFetch<MenuItemResponse>("/api/menu/aggregate", {
+        method: "POST",
+        auth: true,
+        body: { ...input, variants },
+      });
+      const item = { ...data.item, variants: data.item.variants ?? [] };
+      setItems((prev) => [...prev, item]);
+      return item;
+    },
+    [],
+  );
 
   const updateMenuItem = useCallback(
+    async (
+      id: string,
+      patch: CreateMenuItemInput,
+      variants: SaveVariantInput[],
+      expectedUpdatedAt: string,
+    ): Promise<MenuItem> => {
+      const data = await apiFetch<MenuItemResponse>(`/api/menu/${id}/aggregate`, {
+        method: "PATCH",
+        auth: true,
+        body: { ...patch, variants, expectedUpdatedAt },
+      });
+      const updated = { ...data.item, variants: data.item.variants ?? [] };
+      setItems((prev) => prev.map((item) => (item.id === id ? updated : item)));
+      return updated;
+    },
+    [],
+  );
+
+  const patchMenuItem = useCallback(
     async (id: string, patch: UpdateMenuItemPatch): Promise<MenuItem> => {
       const data = await apiFetch<MenuItemResponse>(`/api/menu/${id}`, {
         method: "PATCH",
         auth: true,
         body: patch,
       });
-      let merged = data.item;
-      setItems((prev) =>
-        prev.map((it) => {
-          if (it.id !== id) return it;
-          merged = { ...it, ...data.item, variants: data.item.variants ?? it.variants };
-          return merged;
-        }),
-      );
-      return merged;
+      const updated = { ...data.item, variants: data.item.variants ?? [] };
+      setItems((prev) => prev.map((item) => (item.id === id ? updated : item)));
+      return updated;
     },
     [],
   );
@@ -116,80 +127,13 @@ export function useMenuItems() {
     setItems((prev) => prev.filter((it) => it.id !== id));
   }, []);
 
-  const createVariant = useCallback(
-    async (menuItemId: string, input: CreateVariantInput): Promise<MenuItemVariant> => {
-      const data = await apiFetch<VariantResponse>(`/api/menu/${menuItemId}/variants`, {
-        method: "POST",
-        auth: true,
-        body: input,
-      });
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === menuItemId
-            ? { ...item, variants: sortVariants([...item.variants, data.variant]) }
-            : item,
-        ),
-      );
-      return data.variant;
-    },
-    [],
-  );
-
-  const updateVariant = useCallback(
-    async (
-      menuItemId: string,
-      variantId: string,
-      patch: UpdateVariantPatch,
-    ): Promise<MenuItemVariant> => {
-      const data = await apiFetch<VariantResponse>(
-        `/api/menu/${menuItemId}/variants/${variantId}`,
-        { method: "PATCH", auth: true, body: patch },
-      );
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === menuItemId
-            ? {
-                ...item,
-                variants: sortVariants(
-                  item.variants.map((variant) =>
-                    variant.id === variantId ? data.variant : variant,
-                  ),
-                ),
-              }
-            : item,
-        ),
-      );
-      return data.variant;
-    },
-    [],
-  );
-
-  const deleteVariant = useCallback(
-    async (menuItemId: string, variantId: string): Promise<void> => {
-      await apiFetch<void>(`/api/menu/${menuItemId}/variants/${variantId}`, {
-        method: "DELETE",
-        auth: true,
-      });
-      setItems((prev) =>
-        prev.map((item) =>
-          item.id === menuItemId
-            ? { ...item, variants: item.variants.filter((variant) => variant.id !== variantId) }
-            : item,
-        ),
-      );
-    },
-    [],
-  );
-
   return {
     items: sortedItems,
     loading,
     loadError,
     createMenuItem,
     updateMenuItem,
+    patchMenuItem,
     deleteMenuItem,
-    createVariant,
-    updateVariant,
-    deleteVariant,
   };
 }

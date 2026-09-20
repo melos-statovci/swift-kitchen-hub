@@ -54,12 +54,12 @@ export type OrderStatus =
 
 export type OrderItem = {
   id: string;
-  menuItemId: string;
-  variantId: string | null;
+  menuItemId?: string;
+  variantId?: string | null;
   nameSnapshot: string;
   priceSnapshot: number;
   variantNameSnapshot: string | null;
-  variantPriceSnapshot: number | null;
+  variantPriceSnapshot?: number | null;
   quantity: number;
   notes: string | null;
 };
@@ -67,8 +67,8 @@ export type OrderItem = {
 export type Order = {
   id: string;
   orderNumber: string;
-  trackingToken: string;
-  cancelToken: string | null;
+  trackingToken?: string;
+  cancelToken?: string | null;
   status: OrderStatus;
   fulfillmentType: "DELIVERY" | "PICKUP";
   customerName: string;
@@ -78,7 +78,7 @@ export type Order = {
   subtotal: number;
   deliveryFee: number;
   total: number;
-  declineReason: string | null;
+  declineReason?: string | null;
   customerNotified: boolean;
   assignedDriverId: string | null;
   assignedDriver: { id: string; name: string } | null;

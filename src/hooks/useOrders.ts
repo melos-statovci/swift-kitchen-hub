@@ -152,12 +152,19 @@ export function useOrders() {
       });
     };
 
+    const handleRemoved = ({ id }: { id: string }) => {
+      knownIds.current.delete(id);
+      setOrders((prev) => prev.filter((order) => order.id !== id));
+    };
+
     socket.on("order:updated", handleUpdated);
     socket.on("order:created", handleCreated);
+    socket.on("order:removed", handleRemoved);
 
     return () => {
       socket.off("order:updated", handleUpdated);
       socket.off("order:created", handleCreated);
+      socket.off("order:removed", handleRemoved);
     };
   }, []);
 

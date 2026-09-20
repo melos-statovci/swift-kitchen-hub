@@ -33,17 +33,17 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Category, MenuItem } from "@/lib/types";
-import type {
-  CreateMenuItemInput,
-  CreateVariantInput,
-  UpdateVariantPatch,
-} from "@/hooks/useMenuItems";
+import type { CreateMenuItemInput, SaveVariantInput } from "@/hooks/useMenuItems";
+import { requiresExplicitFlatPrice } from "@/lib/menuPricing";
 
 // `price` here is in EUROS (what the manager types); converted to cents on submit.
 const schema = z.object({
   name: z.string().trim().min(1, "Name is required").max(120),
   description: z.string().trim().max(1000).optional(),
-  price: z.coerce.number({ invalid_type_error: "Enter a price" }).min(0, "Price can't be negative"),
+  price: z.coerce
+    .number({ invalid_type_error: "Enter a price" })
+    .min(0, "Price can't be negative")
+    .max(1000, "Price can't exceed €1,000"),
   variantMode: z.enum(["NONE", "REQUIRED"]),
   category: z.string().min(1, "Select a category"),
   imageUrl: z.string().trim().url("Enter a valid image URL").or(z.literal("")).optional(),
@@ -66,15 +66,13 @@ export type MenuFormDialogProps = {
   mode: "create" | "edit";
   item: MenuItem | null;
   categories: Category[];
-  onCreate: (values: CreateMenuItemInput) => Promise<MenuItem>;
-  onUpdate: (id: string, values: CreateMenuItemInput) => Promise<MenuItem>;
-  onCreateVariant: (menuItemId: string, values: CreateVariantInput) => Promise<unknown>;
-  onUpdateVariant: (
-    menuItemId: string,
-    variantId: string,
-    values: UpdateVariantPatch,
-  ) => Promise<unknown>;
-  onDeleteVariant: (menuItemId: string, variantId: string) => Promise<void>;
+  onCreate: (values: CreateMenuItemInput, variants: SaveVariantInput[]) => Promise<MenuItem>;
+  onUpdate: (
+    id: string,
+    values: CreateMenuItemInput,
+    variants: SaveVariantInput[],
+    expectedUpdatedAt: string,
+  ) => Promise<MenuItem>;
 };
 
 export function MenuFormDialog({
@@ -85,13 +83,10 @@ export function MenuFormDialog({
   categories,
   onCreate,
   onUpdate,
-  onCreateVariant,
-  onUpdateVariant,
-  onDeleteVariant,
 }: MenuFormDialogProps) {
   const isCreate = mode === "create";
   const [variants, setVariants] = useState<VariantDraft[]>([]);
-  const [removedVariantIds, setRemovedVariantIds] = useState<string[]>([]);
+  const [requiresFlatPrice, setRequiresFlatPrice] = useState(false);
 
   const form = useForm<Values>({
     resolver: zodResolver(schema),
@@ -140,7 +135,7 @@ export function MenuFormDialog({
             available: variant.available,
           })),
     );
-    setRemovedVariantIds([]);
+    setRequiresFlatPrice(false);
   }, [open, isCreate, item, categories, form]);
 
   const submit = async (values: Values) => {
@@ -152,12 +147,20 @@ export function MenuFormDialog({
       if (
         variants.some(
           (variant) =>
-            !variant.name.trim() || !Number.isFinite(variant.priceEuros) || variant.priceEuros < 0,
+            !variant.name.trim() ||
+            !Number.isFinite(variant.priceEuros) ||
+            variant.priceEuros < 0 ||
+            variant.priceEuros > 1000,
         )
       ) {
         toast.error("Every variant needs a name and a valid price.");
         return;
       }
+    }
+
+    if (values.variantMode === "NONE" && requiresFlatPrice) {
+      toast.error("Enter the new flat price before saving.");
+      return;
     }
 
     const payload: CreateMenuItemInput = {
@@ -169,33 +172,23 @@ export function MenuFormDialog({
       imageUrl: values.imageUrl?.trim() ? values.imageUrl.trim() : null,
       available: values.available,
     };
-    try {
-      let saved: MenuItem;
-      if (isCreate) {
-        saved = await onCreate(payload);
-      } else if (item) {
-        saved = await onUpdate(item.id, payload);
-      } else {
-        return;
-      }
-
-      if (values.variantMode === "REQUIRED") {
-        for (const variantId of removedVariantIds) {
-          await onDeleteVariant(saved.id, variantId);
-        }
-        for (const [sortOrder, variant] of variants.entries()) {
-          const variantPayload = {
+    const variantPayload: SaveVariantInput[] =
+      values.variantMode === "REQUIRED"
+        ? variants.map((variant, sortOrder) => ({
+            ...(variant.id ? { id: variant.id } : {}),
             name: variant.name.trim(),
             price: Math.round(variant.priceEuros * 100),
             sortOrder,
             available: variant.available,
-          };
-          if (variant.id) {
-            await onUpdateVariant(saved.id, variant.id, variantPayload);
-          } else {
-            await onCreateVariant(saved.id, variantPayload);
-          }
-        }
+          }))
+        : [];
+    try {
+      if (isCreate) {
+        await onCreate(payload, variantPayload);
+      } else if (item) {
+        await onUpdate(item.id, payload, variantPayload, item.updatedAt);
+      } else {
+        return;
       }
       onOpenChange(false);
     } catch (err) {
@@ -222,7 +215,6 @@ export function MenuFormDialog({
   };
 
   const removeVariant = (variant: VariantDraft) => {
-    if (variant.id) setRemovedVariantIds((current) => [...current, variant.id!]);
     setVariants((current) => current.filter((candidate) => candidate.key !== variant.key));
   };
 
@@ -286,7 +278,21 @@ export function MenuFormDialog({
               render={({ field }) => (
                 <FormItem>
                   <FormLabel>Pricing</FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <Select
+                    onValueChange={(nextMode: "NONE" | "REQUIRED") => {
+                      if (requiresExplicitFlatPrice(field.value, nextMode)) {
+                        form.setValue("price", undefined as never, {
+                          shouldDirty: false,
+                          shouldValidate: false,
+                        });
+                        setRequiresFlatPrice(true);
+                      } else if (nextMode === "REQUIRED") {
+                        setRequiresFlatPrice(false);
+                      }
+                      field.onChange(nextMode);
+                    }}
+                    value={field.value}
+                  >
                     <FormControl>
                       <SelectTrigger>
                         <SelectValue />
@@ -298,7 +304,8 @@ export function MenuFormDialog({
                     </SelectContent>
                   </Select>
                   <FormDescription>
-                    Use variants for sizes such as E Vogël, E Mesme, and E Madhe.
+                    Use variants for sizes such as E Vogël, E Mesme, and E Madhe. Existing variants
+                    are retained if you switch back to a flat price.
                   </FormDescription>
                 </FormItem>
               )}
@@ -313,8 +320,27 @@ export function MenuFormDialog({
                     <FormItem>
                       <FormLabel>Price (€)</FormLabel>
                       <FormControl>
-                        <Input type="number" step="0.01" min="0" inputMode="decimal" {...field} />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          max="1000"
+                          inputMode="decimal"
+                          {...field}
+                          value={field.value ?? ""}
+                          onChange={(event) => {
+                            const nextPrice = event.target.value;
+                            setRequiresFlatPrice(nextPrice === "");
+                            field.onChange(nextPrice === "" ? undefined : nextPrice);
+                          }}
+                          placeholder={requiresFlatPrice ? "Enter new flat price" : undefined}
+                        />
                       </FormControl>
+                      {requiresFlatPrice && (
+                        <FormDescription>
+                          Enter a new flat price explicitly before saving this mode change.
+                        </FormDescription>
+                      )}
                       <FormMessage />
                     </FormItem>
                   )}
@@ -384,6 +410,7 @@ export function MenuFormDialog({
                           type="number"
                           step="0.01"
                           min="0"
+                          max="1000"
                           inputMode="decimal"
                           value={variant.priceEuros}
                           onChange={(event) =>
