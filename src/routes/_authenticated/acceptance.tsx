@@ -38,7 +38,7 @@ function AcceptanceDashboard() {
   const [dialog, setDialog] = useState<DialogState>({ kind: "none" });
 
   const activeOrder =
-    dialog.kind !== "none" ? orders.find((o) => o.id === dialog.orderId) ?? null : null;
+    dialog.kind !== "none" ? (orders.find((o) => o.id === dialog.orderId) ?? null) : null;
 
   const handleDecline = (id: string) => setDialog({ kind: "decline", orderId: id });
   const handleDispatchOpen = (id: string) => setDialog({ kind: "dispatch", orderId: id });
@@ -80,12 +80,7 @@ function AcceptanceDashboard() {
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
         <KanbanColumn title="Pending" count={pendingOrders.length} pulseWhenActive>
           {pendingOrders.map((o) => (
-            <OrderCard
-              key={o.id}
-              order={o}
-              onAccept={acceptOrder}
-              onDecline={handleDecline}
-            />
+            <OrderCard key={o.id} order={o} onAccept={acceptOrder} onDecline={handleDecline} />
           ))}
         </KanbanColumn>
         <KanbanColumn title="Accepted" count={acceptanceAcceptedOrders.length}>
@@ -111,21 +106,22 @@ function AcceptanceDashboard() {
       </div>
 
       <DeclineDialog
-        orderNumber={dialog.kind === "decline" ? activeOrder?.orderNumber ?? null : null}
+        orderNumber={dialog.kind === "decline" ? (activeOrder?.orderNumber ?? null) : null}
         open={dialog.kind === "decline"}
         onOpenChange={(v) => !v && setDialog({ kind: "none" })}
         onConfirm={confirmDecline}
       />
       <ConfirmDialog
         mode="dispatch"
-        orderNumber={dialog.kind === "dispatch" ? activeOrder?.orderNumber ?? null : null}
+        orderNumber={dialog.kind === "dispatch" ? (activeOrder?.orderNumber ?? null) : null}
         open={dialog.kind === "dispatch"}
         onOpenChange={(v) => !v && setDialog({ kind: "none" })}
         onConfirm={confirmDispatch}
       />
       <ConfirmDialog
         mode="pickup"
-        orderNumber={dialog.kind === "pickup" ? activeOrder?.orderNumber ?? null : null}
+        fulfillmentType={activeOrder?.fulfillmentType}
+        orderNumber={dialog.kind === "pickup" ? (activeOrder?.orderNumber ?? null) : null}
         open={dialog.kind === "pickup"}
         onOpenChange={(v) => !v && setDialog({ kind: "none" })}
         onConfirm={confirmPickup}

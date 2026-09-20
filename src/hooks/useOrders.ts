@@ -4,6 +4,7 @@ import type { Order, OrderStatus } from "@/lib/types";
 import { apiFetch, ApiError, NetworkError } from "@/lib/api";
 import { connectSocket } from "@/lib/socket";
 import { playChime } from "@/lib/sound";
+import { isOrderVisibleToRole } from "@/lib/orderVisibility";
 
 const sortByPlaced = (a: Order, b: Order) =>
   new Date(a.placedAt).getTime() - new Date(b.placedAt).getTime();
@@ -22,25 +23,6 @@ function describeError(err: unknown, fallback: string): string {
   if (err instanceof ApiError) return err.message;
   return fallback;
 }
-
-// Roles only see orders with certain statuses. The backend filters its initial
-// GET response, and the WebSocket broadcast goes to all staff — so the frontend
-// must also filter to avoid showing kitchen staff a PENDING order, for example.
-const STATUSES_VISIBLE_TO_ROLE: Record<string, OrderStatus[]> = {
-  admin: [
-    "PENDING",
-    "ACCEPTED",
-    "IN_PROGRESS",
-    "READY",
-    "OUT_FOR_DELIVERY",
-    "DELIVERED",
-    "DECLINED",
-    "CANCELLED",
-  ],
-  acceptance: ["PENDING", "ACCEPTED", "IN_PROGRESS", "READY", "OUT_FOR_DELIVERY"],
-  kitchen: ["ACCEPTED", "IN_PROGRESS", "READY"],
-  driver: ["READY", "OUT_FOR_DELIVERY"],
-};
 
 function getCurrentUser(): { id?: string; role?: string } {
   if (typeof window === "undefined") return {};
@@ -78,9 +60,11 @@ export function useOrders() {
     apiFetch<OrdersListResponse>("/api/orders", { auth: true, signal: ac.signal })
       .then((data) => {
         if (cancelled) return;
+        const role = getCurrentRole();
+        const visibleOrders = data.orders.filter((order) => isOrderVisibleToRole(order, role));
         // Seed known IDs from the initial load so existing orders don't chime.
-        data.orders.forEach((o) => knownIds.current.add(o.id));
-        setOrders(data.orders);
+        visibleOrders.forEach((o) => knownIds.current.add(o.id));
+        setOrders(visibleOrders);
         setLoading(false);
       })
       .catch((err) => {
@@ -106,10 +90,9 @@ export function useOrders() {
     if (!socket) return;
 
     const role = getCurrentRole();
-    const visible = new Set(STATUSES_VISIBLE_TO_ROLE[role] ?? []);
 
     const handleUpdated = (incoming: Order) => {
-      const isVisible = visible.has(incoming.status);
+      const isVisible = isOrderVisibleToRole(incoming, role);
       const wasKnown = knownIds.current.has(incoming.id);
 
       // Chime when an order *newly enters* this role's board:
@@ -153,8 +136,7 @@ export function useOrders() {
 
     const handleCreated = (incoming: Order) => {
       // A new order was just placed — only acceptance and admin care
-      const visibleForRole = STATUSES_VISIBLE_TO_ROLE[role] ?? [];
-      if (!visibleForRole.includes(incoming.status)) return;
+      if (!isOrderVisibleToRole(incoming, role)) return;
 
       const wasKnown = knownIds.current.has(incoming.id);
       knownIds.current.add(incoming.id);
@@ -451,6 +433,7 @@ export function useOrders() {
       orders
         .filter(
           (o) =>
+            o.fulfillmentType !== "PICKUP" &&
             !o.assignedDriverId &&
             (o.status === "READY" || o.status === "OUT_FOR_DELIVERY"),
         )
@@ -466,6 +449,7 @@ export function useOrders() {
       orders
         .filter(
           (o) =>
+            o.fulfillmentType !== "PICKUP" &&
             !!o.assignedDriverId &&
             o.assignedDriverId === currentUserId &&
             (o.status === "READY" || o.status === "OUT_FOR_DELIVERY"),

@@ -8,6 +8,7 @@ import type { Order } from "@/lib/types";
 import { formatCurrency, formatRelative, formatTime } from "@/lib/format";
 import { AgeBadge } from "@/components/AgeBadge";
 import { minutesInStatus, ageLevelFor, AGE_BORDER } from "@/lib/orderAge";
+import { FulfillmentBadge } from "@/components/FulfillmentBadge";
 
 type Props = {
   order: Order;
@@ -44,6 +45,7 @@ export function OrderCard({ order, onAccept, onDecline, onDispatch, onPickup }: 
           <div className="flex items-center gap-2">
             <div className="text-base font-bold tracking-tight">#{order.orderNumber}</div>
             {minutes !== null && <AgeBadge minutes={minutes} />}
+            <FulfillmentBadge fulfillmentType={order.fulfillmentType} />
           </div>
           <div className="text-xs text-muted-foreground">
             {formatRelative(order.placedAt)} · {formatTime(order.placedAt)}
@@ -63,10 +65,12 @@ export function OrderCard({ order, onAccept, onDecline, onDispatch, onPickup }: 
           <Phone className="h-3 w-3" aria-hidden />
           <span>{order.customerPhone}</span>
         </div>
-        <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
-          <MapPin className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
-          <span className={cn(!expanded && "line-clamp-1")}>{order.customerAddress}</span>
-        </div>
+        {order.fulfillmentType !== "PICKUP" && order.customerAddress && (
+          <div className="flex items-start gap-1.5 text-xs text-muted-foreground">
+            <MapPin className="mt-0.5 h-3 w-3 shrink-0" aria-hidden />
+            <span className={cn(!expanded && "line-clamp-1")}>{order.customerAddress}</span>
+          </div>
+        )}
       </div>
 
       {order.customerNotes && (
@@ -93,9 +97,12 @@ export function OrderCard({ order, onAccept, onDecline, onDispatch, onPickup }: 
                 <span className="font-medium">
                   {item.nameSnapshot} × {item.quantity}
                 </span>
-                {item.notes && (
-                  <div className="text-muted-foreground italic">↳ {item.notes}</div>
+                {item.variantNameSnapshot && (
+                  <div className="font-medium text-muted-foreground">
+                    {item.variantNameSnapshot}
+                  </div>
                 )}
+                {item.notes && <div className="text-muted-foreground italic">↳ {item.notes}</div>}
               </div>
               <span className="tabular-nums text-muted-foreground">
                 {formatCurrency(item.priceSnapshot * item.quantity)}
@@ -108,11 +115,7 @@ export function OrderCard({ order, onAccept, onDecline, onDispatch, onPickup }: 
       <div className="mt-4">
         {order.status === "PENDING" && (
           <div className="flex flex-col gap-2">
-            <Button
-              size="lg"
-              className="h-11 flex-1"
-              onClick={() => onAccept?.(order.id)}
-            >
+            <Button size="lg" className="h-11 flex-1" onClick={() => onAccept?.(order.id)}>
               Accept
             </Button>
             <Button
@@ -133,16 +136,18 @@ export function OrderCard({ order, onAccept, onDecline, onDispatch, onPickup }: 
         )}
         {order.status === "READY" && (
           <div className="flex flex-col gap-2">
-            <Button size="lg" className="h-11 flex-1" onClick={() => onDispatch?.(order.id)}>
-              Out for Delivery
-            </Button>
+            {order.fulfillmentType !== "PICKUP" && (
+              <Button size="lg" className="h-11 flex-1" onClick={() => onDispatch?.(order.id)}>
+                Dispatch delivery
+              </Button>
+            )}
             <Button
               size="lg"
               variant="secondary"
               className="h-11 flex-1"
               onClick={() => onPickup?.(order.id)}
             >
-              Mark Delivered
+              {order.fulfillmentType === "PICKUP" ? "Complete pickup" : "Complete without driver"}
             </Button>
           </div>
         )}

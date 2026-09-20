@@ -45,8 +45,17 @@ type DialogState =
   | { kind: "delete"; item: MenuItem };
 
 function MenuDashboard() {
-  const { items, loading, loadError, createMenuItem, updateMenuItem, deleteMenuItem } =
-    useMenuItems();
+  const {
+    items,
+    loading,
+    loadError,
+    createMenuItem,
+    updateMenuItem,
+    deleteMenuItem,
+    createVariant,
+    updateVariant,
+    deleteVariant,
+  } = useMenuItems();
   const {
     categories,
     loading: categoriesLoading,
@@ -65,8 +74,7 @@ function MenuDashboard() {
     return () => window.clearTimeout(t);
   }, [searchInput]);
 
-  const categoryName = (slug: string) =>
-    categories.find((c) => c.slug === slug)?.name ?? slug;
+  const categoryName = (slug: string) => categories.find((c) => c.slug === slug)?.name ?? slug;
 
   const itemCounts = useMemo(() => {
     const m: Record<string, number> = {};
@@ -78,9 +86,7 @@ function MenuDashboard() {
     const q = search.trim().toLowerCase();
     if (!q) return items;
     return items.filter(
-      (i) =>
-        i.name.toLowerCase().includes(q) ||
-        categoryName(i.category).toLowerCase().includes(q),
+      (i) => i.name.toLowerCase().includes(q) || categoryName(i.category).toLowerCase().includes(q),
     );
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [items, search, categories]);
@@ -90,11 +96,13 @@ function MenuDashboard() {
   const handleCreate = async (values: CreateMenuItemInput) => {
     const created = await createMenuItem(values);
     toast.success(`Added ${created.name}`);
+    return created;
   };
 
   const handleUpdate = async (id: string, values: CreateMenuItemInput) => {
-    await updateMenuItem(id, values);
+    const updated = await updateMenuItem(id, values);
     toast.success("Menu item updated");
+    return updated;
   };
 
   const handleToggleAvailable = async (item: MenuItem) => {
@@ -190,7 +198,9 @@ function MenuDashboard() {
                           <Badge variant="outline">{categoryName(item.category)}</Badge>
                         </TableCell>
                         <TableCell className="text-right tabular-nums">
-                          {formatCurrency(item.price)}
+                          {item.variantMode === "REQUIRED"
+                            ? `${item.variants.length} variant${item.variants.length === 1 ? "" : "s"}`
+                            : formatCurrency(item.price ?? 0)}
                         </TableCell>
                         <TableCell className="text-center">
                           <Switch
@@ -266,6 +276,9 @@ function MenuDashboard() {
         categories={categories}
         onCreate={handleCreate}
         onUpdate={handleUpdate}
+        onCreateVariant={createVariant}
+        onUpdateVariant={updateVariant}
+        onDeleteVariant={deleteVariant}
       />
       <DeleteMenuItemDialog
         open={dialog.kind === "delete"}
@@ -285,9 +298,7 @@ function EmptyState({ onAdd, canAdd }: { onAdd: () => void; canAdd: boolean }) {
       </div>
       <h2 className="text-lg font-semibold">No menu items yet</h2>
       <p className="mt-1 text-sm text-muted-foreground">
-        {canAdd
-          ? "Add your first dish to get started."
-          : "Add a category first, then add dishes."}
+        {canAdd ? "Add your first dish to get started." : "Add a category first, then add dishes."}
       </p>
       {canAdd && (
         <Button className="mt-4" onClick={onAdd}>

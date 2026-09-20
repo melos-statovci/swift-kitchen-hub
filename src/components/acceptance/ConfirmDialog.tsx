@@ -15,13 +15,21 @@ type Mode = "dispatch" | "pickup";
 
 type Props = {
   mode: Mode;
+  fulfillmentType?: "DELIVERY" | "PICKUP";
   orderNumber: string | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
   onConfirm: (notify: boolean) => void;
 };
 
-export function ConfirmDialog({ mode, orderNumber, open, onOpenChange, onConfirm }: Props) {
+export function ConfirmDialog({
+  mode,
+  fulfillmentType,
+  orderNumber,
+  open,
+  onOpenChange,
+  onConfirm,
+}: Props) {
   const [notify, setNotify] = useState(true);
 
   useEffect(() => {
@@ -35,7 +43,9 @@ export function ConfirmDialog({ mode, orderNumber, open, onOpenChange, onConfirm
   const description =
     mode === "dispatch"
       ? "Mark this order as out for delivery."
-      : "Mark this pickup order as delivered.";
+      : fulfillmentType === "PICKUP"
+        ? "Mark this pickup order as collected."
+        : "Complete this delivery without sending it through the driver workflow.";
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>

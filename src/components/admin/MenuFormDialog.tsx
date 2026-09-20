@@ -1,4 +1,5 @@
-import { useEffect } from "react";
+import { useEffect, useState } from "react";
+import { ArrowDown, ArrowUp, Plus, Trash2 } from "lucide-react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -32,15 +33,18 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import type { Category, MenuItem } from "@/lib/types";
-import type { CreateMenuItemInput } from "@/hooks/useMenuItems";
+import type {
+  CreateMenuItemInput,
+  CreateVariantInput,
+  UpdateVariantPatch,
+} from "@/hooks/useMenuItems";
 
 // `price` here is in EUROS (what the manager types); converted to cents on submit.
 const schema = z.object({
   name: z.string().trim().min(1, "Name is required").max(120),
   description: z.string().trim().max(1000).optional(),
-  price: z.coerce
-    .number({ invalid_type_error: "Enter a price" })
-    .min(0, "Price can't be negative"),
+  price: z.coerce.number({ invalid_type_error: "Enter a price" }).min(0, "Price can't be negative"),
+  variantMode: z.enum(["NONE", "REQUIRED"]),
   category: z.string().min(1, "Select a category"),
   imageUrl: z.string().trim().url("Enter a valid image URL").or(z.literal("")).optional(),
   available: z.boolean(),
@@ -48,14 +52,29 @@ const schema = z.object({
 
 type Values = z.infer<typeof schema>;
 
+type VariantDraft = {
+  id?: string;
+  key: string;
+  name: string;
+  priceEuros: number;
+  available: boolean;
+};
+
 export type MenuFormDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   mode: "create" | "edit";
   item: MenuItem | null;
   categories: Category[];
-  onCreate: (values: CreateMenuItemInput) => Promise<void>;
-  onUpdate: (id: string, values: CreateMenuItemInput) => Promise<void>;
+  onCreate: (values: CreateMenuItemInput) => Promise<MenuItem>;
+  onUpdate: (id: string, values: CreateMenuItemInput) => Promise<MenuItem>;
+  onCreateVariant: (menuItemId: string, values: CreateVariantInput) => Promise<unknown>;
+  onUpdateVariant: (
+    menuItemId: string,
+    variantId: string,
+    values: UpdateVariantPatch,
+  ) => Promise<unknown>;
+  onDeleteVariant: (menuItemId: string, variantId: string) => Promise<void>;
 };
 
 export function MenuFormDialog({
@@ -66,8 +85,13 @@ export function MenuFormDialog({
   categories,
   onCreate,
   onUpdate,
+  onCreateVariant,
+  onUpdateVariant,
+  onDeleteVariant,
 }: MenuFormDialogProps) {
   const isCreate = mode === "create";
+  const [variants, setVariants] = useState<VariantDraft[]>([]);
+  const [removedVariantIds, setRemovedVariantIds] = useState<string[]>([]);
 
   const form = useForm<Values>({
     resolver: zodResolver(schema),
@@ -75,6 +99,7 @@ export function MenuFormDialog({
       name: "",
       description: "",
       price: 0,
+      variantMode: "NONE",
       category: "",
       imageUrl: "",
       available: true,
@@ -88,6 +113,7 @@ export function MenuFormDialog({
         name: "",
         description: "",
         price: 0,
+        variantMode: "NONE",
         category: categories[0]?.slug ?? "",
         imageUrl: "",
         available: true,
@@ -96,34 +122,121 @@ export function MenuFormDialog({
       form.reset({
         name: item.name,
         description: item.description ?? "",
-        price: item.price / 100, // cents → euros for display
+        price: (item.price ?? 0) / 100, // cents → euros for display
+        variantMode: item.variantMode,
         category: item.category,
         imageUrl: item.imageUrl ?? "",
         available: item.available,
       });
     }
+    setVariants(
+      isCreate || !item
+        ? []
+        : item.variants.map((variant) => ({
+            id: variant.id,
+            key: variant.id,
+            name: variant.name,
+            priceEuros: variant.price / 100,
+            available: variant.available,
+          })),
+    );
+    setRemovedVariantIds([]);
   }, [open, isCreate, item, categories, form]);
 
   const submit = async (values: Values) => {
+    if (values.variantMode === "REQUIRED") {
+      if (variants.length === 0 || !variants.some((variant) => variant.available)) {
+        toast.error("Add at least one available variant.");
+        return;
+      }
+      if (
+        variants.some(
+          (variant) =>
+            !variant.name.trim() || !Number.isFinite(variant.priceEuros) || variant.priceEuros < 0,
+        )
+      ) {
+        toast.error("Every variant needs a name and a valid price.");
+        return;
+      }
+    }
+
     const payload: CreateMenuItemInput = {
       name: values.name.trim(),
       description: values.description?.trim() ? values.description.trim() : null,
-      price: Math.round(values.price * 100), // euros → cents
+      price: values.variantMode === "REQUIRED" ? null : Math.round(values.price * 100),
+      variantMode: values.variantMode,
       category: values.category,
       imageUrl: values.imageUrl?.trim() ? values.imageUrl.trim() : null,
       available: values.available,
     };
     try {
+      let saved: MenuItem;
       if (isCreate) {
-        await onCreate(payload);
+        saved = await onCreate(payload);
       } else if (item) {
-        await onUpdate(item.id, payload);
+        saved = await onUpdate(item.id, payload);
+      } else {
+        return;
+      }
+
+      if (values.variantMode === "REQUIRED") {
+        for (const variantId of removedVariantIds) {
+          await onDeleteVariant(saved.id, variantId);
+        }
+        for (const [sortOrder, variant] of variants.entries()) {
+          const variantPayload = {
+            name: variant.name.trim(),
+            price: Math.round(variant.priceEuros * 100),
+            sortOrder,
+            available: variant.available,
+          };
+          if (variant.id) {
+            await onUpdateVariant(saved.id, variant.id, variantPayload);
+          } else {
+            await onCreateVariant(saved.id, variantPayload);
+          }
+        }
       }
       onOpenChange(false);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to save menu item");
     }
   };
+
+  const addVariant = () => {
+    setVariants((current) => [
+      ...current,
+      {
+        key: `new-${crypto.randomUUID()}`,
+        name: "",
+        priceEuros: 0,
+        available: true,
+      },
+    ]);
+  };
+
+  const updateVariantDraft = (key: string, patch: Partial<VariantDraft>) => {
+    setVariants((current) =>
+      current.map((variant) => (variant.key === key ? { ...variant, ...patch } : variant)),
+    );
+  };
+
+  const removeVariant = (variant: VariantDraft) => {
+    if (variant.id) setRemovedVariantIds((current) => [...current, variant.id!]);
+    setVariants((current) => current.filter((candidate) => candidate.key !== variant.key));
+  };
+
+  const moveVariant = (index: number, offset: -1 | 1) => {
+    setVariants((current) => {
+      const target = index + offset;
+      if (target < 0 || target >= current.length) return current;
+      const next = [...current];
+      [next[index], next[target]] = [next[target], next[index]];
+      return next;
+    });
+  };
+
+  const variantMode = form.watch("variantMode");
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -167,20 +280,46 @@ export function MenuFormDialog({
               )}
             />
 
-            <div className="grid grid-cols-2 gap-4">
-              <FormField
-                control={form.control}
-                name="price"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Price (€)</FormLabel>
+            <FormField
+              control={form.control}
+              name="variantMode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Pricing</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
-                      <Input type="number" step="0.01" min="0" inputMode="decimal" {...field} />
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
                     </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
+                    <SelectContent>
+                      <SelectItem value="NONE">One flat price</SelectItem>
+                      <SelectItem value="REQUIRED">Customer chooses one variant</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Use variants for sizes such as E Vogël, E Mesme, and E Madhe.
+                  </FormDescription>
+                </FormItem>
+              )}
+            />
+
+            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+              {variantMode === "NONE" && (
+                <FormField
+                  control={form.control}
+                  name="price"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Price (€)</FormLabel>
+                      <FormControl>
+                        <Input type="number" step="0.01" min="0" inputMode="decimal" {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
               <FormField
                 control={form.control}
                 name="category"
@@ -206,6 +345,98 @@ export function MenuFormDialog({
                 )}
               />
             </div>
+
+            {variantMode === "REQUIRED" && (
+              <div className="space-y-3 rounded-md border border-border p-3">
+                <div className="flex items-center justify-between gap-3">
+                  <div>
+                    <div className="text-sm font-medium">Variants</div>
+                    <div className="text-xs text-muted-foreground">
+                      Order controls customer display order. Archived variants keep order history.
+                    </div>
+                  </div>
+                  <Button type="button" variant="outline" size="sm" onClick={addVariant}>
+                    <Plus className="h-4 w-4" />
+                    Add
+                  </Button>
+                </div>
+
+                {variants.length === 0 ? (
+                  <p className="rounded-md bg-muted/40 px-3 py-4 text-center text-sm text-muted-foreground">
+                    Add at least one available variant before saving.
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {variants.map((variant, index) => (
+                      <div
+                        key={variant.key}
+                        className="grid grid-cols-[1fr_7rem_auto] items-center gap-2 rounded-md bg-muted/30 p-2"
+                      >
+                        <Input
+                          value={variant.name}
+                          onChange={(event) =>
+                            updateVariantDraft(variant.key, { name: event.target.value })
+                          }
+                          placeholder="Variant name"
+                          aria-label={`Variant ${index + 1} name`}
+                        />
+                        <Input
+                          type="number"
+                          step="0.01"
+                          min="0"
+                          inputMode="decimal"
+                          value={variant.priceEuros}
+                          onChange={(event) =>
+                            updateVariantDraft(variant.key, {
+                              priceEuros: Number(event.target.value),
+                            })
+                          }
+                          aria-label={`Variant ${index + 1} price in euros`}
+                        />
+                        <div className="flex items-center gap-1">
+                          <Switch
+                            checked={variant.available}
+                            onCheckedChange={(available) =>
+                              updateVariantDraft(variant.key, { available })
+                            }
+                            aria-label={`Variant ${index + 1} available`}
+                          />
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={index === 0}
+                            onClick={() => moveVariant(index, -1)}
+                            aria-label={`Move variant ${index + 1} up`}
+                          >
+                            <ArrowUp className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            disabled={index === variants.length - 1}
+                            onClick={() => moveVariant(index, 1)}
+                            aria-label={`Move variant ${index + 1} down`}
+                          >
+                            <ArrowDown className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            onClick={() => removeVariant(variant)}
+                            aria-label={`Remove variant ${index + 1}`}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             <FormField
               control={form.control}

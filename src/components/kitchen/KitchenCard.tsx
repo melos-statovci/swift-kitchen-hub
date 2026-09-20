@@ -3,6 +3,7 @@ import { motion } from "framer-motion";
 import { StickyNote, User } from "lucide-react";
 import { cn } from "@/lib/utils";
 import type { Order } from "@/lib/types";
+import { FulfillmentBadge } from "@/components/FulfillmentBadge";
 
 type Props = {
   order: Order;
@@ -32,8 +33,7 @@ export function KitchenCard({ order, onSingleTap, onDoubleTap }: Props) {
   }, []);
 
   const minutes = minutesSince(order.placedAt, now);
-  const urgency =
-    minutes >= 25 ? "critical" : minutes >= 15 ? "warning" : "normal";
+  const urgency = minutes >= 25 ? "critical" : minutes >= 15 ? "warning" : "normal";
 
   const accent =
     order.status === "IN_PROGRESS"
@@ -74,7 +74,10 @@ export function KitchenCard({ order, onSingleTap, onDoubleTap }: Props) {
       }}
     >
       <div className="flex items-start justify-between gap-3">
-        <div className="text-2xl font-bold tracking-tight">#{order.orderNumber}</div>
+        <div>
+          <div className="text-2xl font-bold tracking-tight">#{order.orderNumber}</div>
+          <FulfillmentBadge fulfillmentType={order.fulfillmentType} />
+        </div>
         <div
           className={cn(
             "rounded-md px-2.5 py-1 text-2xl font-bold tabular-nums leading-none",
@@ -100,13 +103,15 @@ export function KitchenCard({ order, onSingleTap, onDoubleTap }: Props) {
         {order.items.map((item) => (
           <li key={item.id} className="text-base leading-snug">
             <div className="font-semibold">
-              <span className="tabular-nums">{item.quantity}</span> ×{" "}
-              {item.nameSnapshot}
+              <span className="tabular-nums">{item.quantity}</span> × {item.nameSnapshot}
             </div>
-            {item.notes && (
-              <div className="pl-6 text-sm italic text-muted-foreground">
-                {item.notes}
+            {item.variantNameSnapshot && (
+              <div className="pl-6 text-sm font-medium text-muted-foreground">
+                {item.variantNameSnapshot}
               </div>
+            )}
+            {item.notes && (
+              <div className="pl-6 text-sm italic text-muted-foreground">{item.notes}</div>
             )}
           </li>
         ))}

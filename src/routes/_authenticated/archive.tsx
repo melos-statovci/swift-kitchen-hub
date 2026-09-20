@@ -20,6 +20,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { RequireRole } from "@/components/RequireRole";
+import { FulfillmentBadge } from "@/components/FulfillmentBadge";
 import {
   useArchive,
   ARCHIVE_STATUS_DISPLAY,
@@ -199,10 +200,7 @@ function ArchiveRow({
 
   return (
     <>
-      <TableRow
-        className="cursor-pointer hover:bg-muted/50"
-        onClick={onToggleExpand}
-      >
+      <TableRow className="cursor-pointer hover:bg-muted/50" onClick={onToggleExpand}>
         <TableCell className="font-mono text-xs">{order.orderNumber}</TableCell>
         <TableCell className="font-medium">{order.customerName}</TableCell>
         <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
@@ -211,9 +209,7 @@ function ArchiveRow({
         <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
           {formatDateTime(order.placedAt)}
         </TableCell>
-        <TableCell className="text-right font-medium">
-          {formatPrice(order.total)}
-        </TableCell>
+        <TableCell className="text-right font-medium">{formatPrice(order.total)}</TableCell>
         <TableCell>
           {statusInfo && (
             <Badge
@@ -252,19 +248,16 @@ function ExpandedDetails({ order }: { order: Order }) {
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
         <div>
           <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">
-            Delivery
+            {order.fulfillmentType === "PICKUP" ? "Pickup" : "Delivery"}
           </p>
-          <p>{order.customerAddress}</p>
+          <FulfillmentBadge fulfillmentType={order.fulfillmentType} />
+          {order.customerAddress && <p className="mt-1">{order.customerAddress}</p>}
           {order.customerNotes && (
-            <p className="text-muted-foreground text-xs mt-1">
-              Notes: {order.customerNotes}
-            </p>
+            <p className="text-muted-foreground text-xs mt-1">Notes: {order.customerNotes}</p>
           )}
         </div>
         <div>
-          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">
-            Timeline
-          </p>
+          <p className="text-muted-foreground text-xs uppercase tracking-wider mb-1">Timeline</p>
           <p className="text-xs">Placed: {formatDateTime(order.placedAt)}</p>
           {order.acceptedAt && (
             <p className="text-xs">Accepted: {formatDateTime(order.acceptedAt)}</p>
@@ -291,9 +284,7 @@ function ExpandedDetails({ order }: { order: Order }) {
       )}
 
       <div>
-        <p className="text-muted-foreground text-xs uppercase tracking-wider mb-2">
-          Items
-        </p>
+        <p className="text-muted-foreground text-xs uppercase tracking-wider mb-2">Items</p>
         <div className="space-y-1.5">
           {order.items.map((item) => (
             <div
@@ -304,15 +295,16 @@ function ExpandedDetails({ order }: { order: Order }) {
                 <span className="font-medium">
                   {item.quantity}× {item.nameSnapshot}
                 </span>
-                {item.notes && (
-                  <span className="text-muted-foreground text-xs ml-2">
-                    ({item.notes})
+                {item.variantNameSnapshot && (
+                  <span className="block text-xs font-medium text-muted-foreground">
+                    {item.variantNameSnapshot}
                   </span>
                 )}
+                {item.notes && (
+                  <span className="text-muted-foreground text-xs ml-2">({item.notes})</span>
+                )}
               </div>
-              <span className="font-mono">
-                {formatPrice(item.priceSnapshot * item.quantity)}
-              </span>
+              <span className="font-mono">{formatPrice(item.priceSnapshot * item.quantity)}</span>
             </div>
           ))}
         </div>
@@ -348,14 +340,10 @@ function EmptyState({
   return (
     <div className="text-center py-16 text-muted-foreground">
       <p className="text-sm">
-        {hasFilters
-          ? "No orders match your filters."
-          : "No orders in the archive yet."}
+        {hasFilters ? "No orders match your filters." : "No orders in the archive yet."}
       </p>
       {hasFilters && (
-        <p className="text-xs mt-1">
-          Try widening the time range or clearing search.
-        </p>
+        <p className="text-xs mt-1">Try widening the time range or clearing search.</p>
       )}
     </div>
   );

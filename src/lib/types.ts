@@ -11,10 +11,24 @@ export type MenuItem = {
   id: string;
   name: string;
   description: string | null;
-  price: number; // cents
+  price: number | null; // cents; null when variantMode is REQUIRED
+  variantMode: "NONE" | "REQUIRED";
+  variants: MenuItemVariant[];
   category: string; // category slug
   imageUrl: string | null;
   available: boolean;
+  createdAt: string;
+  updatedAt: string;
+};
+
+export type MenuItemVariant = {
+  id: string;
+  menuItemId: string;
+  name: string;
+  price: number;
+  sortOrder: number;
+  available: boolean;
+  archivedAt: string | null;
   createdAt: string;
   updatedAt: string;
 };
@@ -41,8 +55,11 @@ export type OrderStatus =
 export type OrderItem = {
   id: string;
   menuItemId: string;
+  variantId: string | null;
   nameSnapshot: string;
   priceSnapshot: number;
+  variantNameSnapshot: string | null;
+  variantPriceSnapshot: number | null;
   quantity: number;
   notes: string | null;
 };
@@ -53,9 +70,10 @@ export type Order = {
   trackingToken: string;
   cancelToken: string | null;
   status: OrderStatus;
+  fulfillmentType: "DELIVERY" | "PICKUP";
   customerName: string;
   customerPhone: string;
-  customerAddress: string;
+  customerAddress: string | null;
   customerNotes: string | null;
   subtotal: number;
   deliveryFee: number;

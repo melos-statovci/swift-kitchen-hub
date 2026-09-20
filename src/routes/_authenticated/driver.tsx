@@ -47,7 +47,7 @@ function DriverDashboard() {
   }, []);
 
   const pendingOrder = pendingId
-    ? driverMineOrders.find((o) => o.id === pendingId) ?? null
+    ? (driverMineOrders.find((o) => o.id === pendingId) ?? null)
     : null;
 
   const confirmDeliver = () => {
@@ -84,7 +84,10 @@ function DriverDashboard() {
                   footer={
                     order.status === "READY" ? (
                       <div className="flex gap-2">
-                        <Button className="h-12 flex-1 text-base" onClick={() => takeOrder(order.id)}>
+                        <Button
+                          className="h-12 flex-1 text-base"
+                          onClick={() => takeOrder(order.id)}
+                        >
                           Out for delivery
                         </Button>
                         <Button
@@ -178,7 +181,7 @@ const STATUS_LABEL: Record<string, string> = {
 function DeliveryCard({ order, footer }: { order: Order; footer: React.ReactNode }) {
   const [expanded, setExpanded] = useState(false);
   const itemCount = order.items.reduce((s, it) => s + it.quantity, 0);
-  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(order.customerAddress)}`;
+  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(order.customerAddress ?? "")}`;
   const telHref = `tel:${order.customerPhone.replace(/[^+\d]/g, "")}`;
   const minutes = minutesInStatus(order);
   const ageLevel = minutes !== null ? ageLevelFor(minutes) : null;
@@ -236,15 +239,17 @@ function DeliveryCard({ order, footer }: { order: Order; footer: React.ReactNode
                 <Phone className="h-4 w-4 shrink-0" aria-hidden />
                 <span className="truncate">{order.customerPhone}</span>
               </a>
-              <a
-                href={mapsUrl}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="flex flex-1 items-start gap-2 rounded-md border border-border bg-background px-3 py-2.5 text-sm font-medium hover:bg-accent"
-              >
-                <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                <span className="line-clamp-2 text-left">{order.customerAddress}</span>
-              </a>
+              {order.customerAddress && (
+                <a
+                  href={mapsUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex flex-1 items-start gap-2 rounded-md border border-border bg-background px-3 py-2.5 text-sm font-medium hover:bg-accent"
+                >
+                  <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+                  <span className="line-clamp-2 text-left">{order.customerAddress}</span>
+                </a>
+              )}
             </div>
 
             {order.customerNotes && (
@@ -258,8 +263,15 @@ function DeliveryCard({ order, footer }: { order: Order; footer: React.ReactNode
               {order.items.map((it) => (
                 <li key={it.id} className="flex items-start justify-between gap-3">
                   <span>
-                    <span className="font-medium tabular-nums">{it.quantity}</span> ×{" "}
-                    {it.nameSnapshot}
+                    <span>
+                      <span className="font-medium tabular-nums">{it.quantity}</span> ×{" "}
+                      {it.nameSnapshot}
+                    </span>
+                    {it.variantNameSnapshot && (
+                      <span className="block pl-5 text-xs font-medium text-muted-foreground">
+                        {it.variantNameSnapshot}
+                      </span>
+                    )}
                   </span>
                   <span className="tabular-nums text-muted-foreground">
                     {formatCurrency(it.priceSnapshot * it.quantity)}
