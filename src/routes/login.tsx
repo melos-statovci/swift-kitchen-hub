@@ -17,6 +17,7 @@ import {
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { login, getToken, getUser, homePathForRole } from "@/lib/auth";
 import { ApiError, NetworkError } from "@/lib/api";
+import { appConfig } from "@/lib/config";
 
 export const Route = createFileRoute("/login")({
   beforeLoad: () => {
@@ -72,7 +73,7 @@ function LoginPage() {
       <Card className="w-full max-w-md border-border shadow-sm">
         <CardHeader className="space-y-2 text-center">
           <div className="mx-auto h-10 w-10 rounded-md bg-foreground" aria-hidden />
-          <CardTitle className="text-2xl">Swift Kitchen</CardTitle>
+          <CardTitle className="text-2xl">{appConfig.restaurantName}</CardTitle>
           <CardDescription>Sign in to your staff account</CardDescription>
         </CardHeader>
         <CardContent>

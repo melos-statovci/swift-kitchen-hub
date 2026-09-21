@@ -5,10 +5,14 @@
   "type": "module",
   "scripts": {
     "dev": "vite dev",
+    "dev:dua": "vite dev --host 127.0.0.1 --port 8081 --mode dua",
     "build": "vite build",
+    "build:dua": "vite build --mode dua",
     "build:dev": "vite build --mode development",
     "preview": "vite preview",
     "test": "node --experimental-strip-types --test src/lib/*.test.mjs",
+    "typecheck": "tsc --noEmit",
+    "validate:dua": "node --env-file=.env.dua.local scripts/validate-dua-local.mjs",
     "lint": "eslint .",
     "format": "prettier --write ."
   },

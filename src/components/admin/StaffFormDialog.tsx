@@ -32,6 +32,7 @@ import {
 } from "@/components/ui/select";
 import type { StaffUser, UserRole } from "@/lib/types";
 import { DuplicateEmailError } from "@/hooks/useUsers";
+import { appConfig } from "@/lib/config";
 
 const ROLES: { value: UserRole; label: string }[] = [
   { value: "admin", label: "Admin" },
@@ -156,7 +157,7 @@ export function StaffFormDialog({
           <DialogTitle>{isCreate ? "Create staff account" : "Edit staff account"}</DialogTitle>
           <DialogDescription>
             {isCreate
-              ? "Add a new person who can access Swift Kitchen."
+              ? `Add a new person who can access ${appConfig.restaurantName}.`
               : "Update this staff member's details."}
           </DialogDescription>
         </DialogHeader>

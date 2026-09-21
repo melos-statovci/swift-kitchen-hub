@@ -1,6 +1,7 @@
 import { Outlet, Link, createRootRoute, HeadContent, Scripts } from "@tanstack/react-router";
 
 import appCss from "../styles.css?url";
+import { appConfig } from "@/lib/config";
 
 function NotFoundComponent() {
   return (
@@ -29,10 +30,13 @@ export const Route = createRootRoute({
     meta: [
       { charSet: "utf-8" },
       { name: "viewport", content: "width=device-width, initial-scale=1" },
-      { title: "Swift Kitchen" },
-      { name: "description", content: "Swift Kitchen — restaurant order management dashboard." },
-      { name: "author", content: "Swift Kitchen" },
-      { property: "og:title", content: "Swift Kitchen" },
+      { title: `${appConfig.restaurantName} Hub` },
+      {
+        name: "description",
+        content: `${appConfig.restaurantName} — restaurant order management dashboard.`,
+      },
+      { name: "author", content: appConfig.restaurantName },
+      { property: "og:title", content: `${appConfig.restaurantName} Hub` },
       { property: "og:description", content: "Restaurant order management dashboard." },
       { property: "og:type", content: "website" },
       { name: "twitter:card", content: "summary" },

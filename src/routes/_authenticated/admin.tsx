@@ -11,6 +11,7 @@ import { ResetPasswordDialog } from "@/components/admin/ResetPasswordDialog";
 import { DeleteUserDialog } from "@/components/admin/DeleteUserDialog";
 import { CantDeleteSelfError, OnlyAdminError, useUsers } from "@/hooks/useUsers";
 import type { StaffUser, UserRole } from "@/lib/types";
+import { appConfig } from "@/lib/config";
 
 export const Route = createFileRoute("/_authenticated/admin")({
   component: () => (
@@ -100,7 +101,7 @@ function AdminDashboard() {
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Staff Accounts</h1>
           <p className="text-sm text-muted-foreground">
-            Manage who can access Swift Kitchen and what they can do.
+            Manage who can access {appConfig.restaurantName} and what they can do.
           </p>
         </div>
         <Button onClick={() => setDialog({ kind: "create" })} disabled={loading}>

@@ -28,6 +28,7 @@ import {
 import { Logo } from "@/components/Logo";
 import { logout, type Role, type User } from "@/lib/auth";
 import { useSoundPref } from "@/hooks/useSoundPref";
+import { appConfig } from "@/lib/config";
 
 type NavItem = { label: string; to: string; icon: LucideIcon };
 type NavGroup = { label?: string; items: NavItem[] };
@@ -88,7 +89,7 @@ export function AppSidebar({ user }: { user: User }) {
         <div className="flex items-center gap-2 px-1 py-1.5">
           <Logo className="h-8 w-8 shrink-0" />
           <span className="text-lg font-semibold tracking-tight group-data-[collapsible=icon]:hidden">
-            Swift Kitchen
+            {appConfig.restaurantName}
           </span>
         </div>
       </SidebarHeader>

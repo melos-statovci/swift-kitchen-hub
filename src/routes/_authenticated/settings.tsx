@@ -11,6 +11,7 @@ import { RequireRole } from "@/components/RequireRole";
 import { useSettings, type DayKey, type SettingsPatch } from "@/hooks/useSettings";
 import { ApiError, NetworkError } from "@/lib/api";
 import { isValidHoursPair } from "@/lib/schedule";
+import { appConfig } from "@/lib/config";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: () => (
@@ -161,7 +162,7 @@ function SettingsPage() {
           {statusBadge}
         </div>
         <p className="text-sm text-muted-foreground mt-1">
-          Hours, delivery fee, and pause control. All times are in local time (Prishtina).
+          Hours, delivery fee, and pause control. All times use {appConfig.businessTimeZone}.
         </p>
       </div>
 

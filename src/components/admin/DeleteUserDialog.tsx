@@ -11,6 +11,7 @@ import {
 import { buttonVariants } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
 import type { StaffUser } from "@/lib/types";
+import { appConfig } from "@/lib/config";
 
 export type DeleteUserDialogProps = {
   open: boolean;
@@ -28,7 +29,8 @@ export function DeleteUserDialog({ open, onOpenChange, user, onConfirm }: Delete
             Delete {user?.name ?? "this user"}'s account?
           </AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently remove their access to Swift Kitchen. This cannot be undone.
+            This will permanently remove their access to {appConfig.restaurantName}. This cannot
+            be undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
