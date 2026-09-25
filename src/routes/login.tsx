@@ -127,7 +127,12 @@ function LoginPage() {
                   {error}
                 </div>
               )}
-              <Button type="submit" size="lg" className="h-12 w-full text-base" disabled={submitting}>
+              <Button
+                type="submit"
+                size="lg"
+                className="h-12 w-full text-base"
+                disabled={submitting}
+              >
                 {submitting ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin" />

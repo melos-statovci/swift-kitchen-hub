@@ -25,12 +25,10 @@ export function DeleteUserDialog({ open, onOpenChange, user, onConfirm }: Delete
     <AlertDialog open={open} onOpenChange={onOpenChange}>
       <AlertDialogContent>
         <AlertDialogHeader>
-          <AlertDialogTitle>
-            Delete {user?.name ?? "this user"}'s account?
-          </AlertDialogTitle>
+          <AlertDialogTitle>Delete {user?.name ?? "this user"}'s account?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently remove their access to {appConfig.restaurantName}. This cannot
-            be undone.
+            This will permanently remove their access to {appConfig.restaurantName}. This cannot be
+            undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

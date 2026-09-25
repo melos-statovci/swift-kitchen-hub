@@ -142,9 +142,7 @@ function AdminDashboard() {
           />
 
           {filtered.length === 0 && (
-            <p className="text-center text-sm text-muted-foreground">
-              No staff match "{search}".
-            </p>
+            <p className="text-center text-sm text-muted-foreground">No staff match "{search}".</p>
           )}
         </>
       )}
@@ -180,9 +178,7 @@ function EmptyState({ onAdd }: { onAdd: () => void }) {
         <Users className="h-6 w-6 text-muted-foreground" />
       </div>
       <h2 className="text-lg font-semibold">No staff accounts yet</h2>
-      <p className="mt-1 text-sm text-muted-foreground">
-        Add your first account to get started.
-      </p>
+      <p className="mt-1 text-sm text-muted-foreground">Add your first account to get started.</p>
       <Button className="mt-4" onClick={onAdd}>
         <Plus className="h-4 w-4" />
         Add staff
