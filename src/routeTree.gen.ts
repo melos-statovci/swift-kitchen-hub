@@ -9,54 +9,34 @@
 // Additionally, you should also exclude this file from your linter and/or formatter to prevent it from being checked or modified.
 
 import { Route as rootRouteImport } from './routes/__root'
-import { Route as LoginRouteImport } from './routes/login'
-import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
 import { Route as IndexRouteImport } from './routes/index'
-import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
-import { Route as AuthenticatedMenuRouteImport } from './routes/_authenticated/menu'
-import { Route as AuthenticatedKitchenRouteImport } from './routes/_authenticated/kitchen'
-import { Route as AuthenticatedDriverRouteImport } from './routes/_authenticated/driver'
-import { Route as AuthenticatedArchiveRouteImport } from './routes/_authenticated/archive'
-import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedRouteImport } from './routes/_authenticated'
+import { Route as LoginRouteImport } from './routes/login'
 import { Route as AuthenticatedAcceptanceRouteImport } from './routes/_authenticated/acceptance'
+import { Route as AuthenticatedAdminRouteImport } from './routes/_authenticated/admin'
+import { Route as AuthenticatedArchiveRouteImport } from './routes/_authenticated/archive'
+import { Route as AuthenticatedDriverRouteImport } from './routes/_authenticated/driver'
+import { Route as AuthenticatedKitchenRouteImport } from './routes/_authenticated/kitchen'
+import { Route as AuthenticatedMenuRouteImport } from './routes/_authenticated/menu'
+import { Route as AuthenticatedSettingsRouteImport } from './routes/_authenticated/settings'
 
-const LoginRoute = LoginRouteImport.update({
-  id: '/login',
-  path: '/login',
+const IndexRoute = IndexRouteImport.update({
+  id: '/',
+  path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AuthenticatedRoute = AuthenticatedRouteImport.update({
   id: '/_authenticated',
   getParentRoute: () => rootRouteImport,
 } as any)
-const IndexRoute = IndexRouteImport.update({
-  id: '/',
-  path: '/',
+const LoginRoute = LoginRouteImport.update({
+  id: '/login',
+  path: '/login',
   getParentRoute: () => rootRouteImport,
 } as any)
-const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
-  id: '/settings',
-  path: '/settings',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedMenuRoute = AuthenticatedMenuRouteImport.update({
-  id: '/menu',
-  path: '/menu',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedKitchenRoute = AuthenticatedKitchenRouteImport.update({
-  id: '/kitchen',
-  path: '/kitchen',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedDriverRoute = AuthenticatedDriverRouteImport.update({
-  id: '/driver',
-  path: '/driver',
-  getParentRoute: () => AuthenticatedRoute,
-} as any)
-const AuthenticatedArchiveRoute = AuthenticatedArchiveRouteImport.update({
-  id: '/archive',
-  path: '/archive',
+const AuthenticatedAcceptanceRoute = AuthenticatedAcceptanceRouteImport.update({
+  id: '/acceptance',
+  path: '/acceptance',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
@@ -64,9 +44,29 @@ const AuthenticatedAdminRoute = AuthenticatedAdminRouteImport.update({
   path: '/admin',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
-const AuthenticatedAcceptanceRoute = AuthenticatedAcceptanceRouteImport.update({
-  id: '/acceptance',
-  path: '/acceptance',
+const AuthenticatedArchiveRoute = AuthenticatedArchiveRouteImport.update({
+  id: '/archive',
+  path: '/archive',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedDriverRoute = AuthenticatedDriverRouteImport.update({
+  id: '/driver',
+  path: '/driver',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedKitchenRoute = AuthenticatedKitchenRouteImport.update({
+  id: '/kitchen',
+  path: '/kitchen',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedMenuRoute = AuthenticatedMenuRouteImport.update({
+  id: '/menu',
+  path: '/menu',
+  getParentRoute: () => AuthenticatedRoute,
+} as any)
+const AuthenticatedSettingsRoute = AuthenticatedSettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
   getParentRoute: () => AuthenticatedRoute,
 } as any)
 
@@ -150,11 +150,11 @@ export interface RootRouteChildren {
 
 declare module '@tanstack/react-router' {
   interface FileRoutesByPath {
-    '/login': {
-      id: '/login'
-      path: '/login'
-      fullPath: '/login'
-      preLoaderRoute: typeof LoginRouteImport
+    '/': {
+      id: '/'
+      path: '/'
+      fullPath: '/'
+      preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/_authenticated': {
@@ -164,46 +164,18 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/': {
-      id: '/'
-      path: '/'
-      fullPath: '/'
-      preLoaderRoute: typeof IndexRouteImport
+    '/login': {
+      id: '/login'
+      path: '/login'
+      fullPath: '/login'
+      preLoaderRoute: typeof LoginRouteImport
       parentRoute: typeof rootRouteImport
     }
-    '/_authenticated/settings': {
-      id: '/_authenticated/settings'
-      path: '/settings'
-      fullPath: '/settings'
-      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/menu': {
-      id: '/_authenticated/menu'
-      path: '/menu'
-      fullPath: '/menu'
-      preLoaderRoute: typeof AuthenticatedMenuRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/kitchen': {
-      id: '/_authenticated/kitchen'
-      path: '/kitchen'
-      fullPath: '/kitchen'
-      preLoaderRoute: typeof AuthenticatedKitchenRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/driver': {
-      id: '/_authenticated/driver'
-      path: '/driver'
-      fullPath: '/driver'
-      preLoaderRoute: typeof AuthenticatedDriverRouteImport
-      parentRoute: typeof AuthenticatedRoute
-    }
-    '/_authenticated/archive': {
-      id: '/_authenticated/archive'
-      path: '/archive'
-      fullPath: '/archive'
-      preLoaderRoute: typeof AuthenticatedArchiveRouteImport
+    '/_authenticated/acceptance': {
+      id: '/_authenticated/acceptance'
+      path: '/acceptance'
+      fullPath: '/acceptance'
+      preLoaderRoute: typeof AuthenticatedAcceptanceRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
     '/_authenticated/admin': {
@@ -213,11 +185,39 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof AuthenticatedAdminRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
-    '/_authenticated/acceptance': {
-      id: '/_authenticated/acceptance'
-      path: '/acceptance'
-      fullPath: '/acceptance'
-      preLoaderRoute: typeof AuthenticatedAcceptanceRouteImport
+    '/_authenticated/archive': {
+      id: '/_authenticated/archive'
+      path: '/archive'
+      fullPath: '/archive'
+      preLoaderRoute: typeof AuthenticatedArchiveRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/driver': {
+      id: '/_authenticated/driver'
+      path: '/driver'
+      fullPath: '/driver'
+      preLoaderRoute: typeof AuthenticatedDriverRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/kitchen': {
+      id: '/_authenticated/kitchen'
+      path: '/kitchen'
+      fullPath: '/kitchen'
+      preLoaderRoute: typeof AuthenticatedKitchenRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/menu': {
+      id: '/_authenticated/menu'
+      path: '/menu'
+      fullPath: '/menu'
+      preLoaderRoute: typeof AuthenticatedMenuRouteImport
+      parentRoute: typeof AuthenticatedRoute
+    }
+    '/_authenticated/settings': {
+      id: '/_authenticated/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof AuthenticatedSettingsRouteImport
       parentRoute: typeof AuthenticatedRoute
     }
   }
