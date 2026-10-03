@@ -12,6 +12,7 @@ import { useSettings, type DayKey, type SettingsPatch } from "@/hooks/useSetting
 import { ApiError, NetworkError } from "@/lib/api";
 import { isValidHoursPair } from "@/lib/schedule";
 import { appConfig } from "@/lib/config";
+import { getSettingsPresentation } from "@/lib/settingsPresentation";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: () => (
@@ -42,13 +43,14 @@ type FormState = {
 };
 
 function SettingsPage() {
-  const { settings, openStatus, loading, error: loadError, saving, save } = useSettings();
+  const { settings, openStatus, loading, error: loadError, saving, save, retry } = useSettings();
   const [form, setForm] = useState<FormState | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
 
   // Hydrate form when settings arrive
   useEffect(() => {
     if (!settings) return;
+    setFormError(null);
     setForm({
       deliveryFeeEuros: (settings.deliveryFee / 100).toFixed(2),
       isPaused: settings.isPaused,
@@ -68,7 +70,7 @@ function SettingsPage() {
     });
   }, [settings]);
 
-  if (loading || !form) {
+  if (loading) {
     return (
       <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
         <Loader2 className="h-8 w-8 animate-spin" />
@@ -77,9 +79,29 @@ function SettingsPage() {
     );
   }
 
-  if (loadError) {
-    return <div className="text-center py-20 text-destructive">{loadError}</div>;
+  if (loadError || !settings) {
+    return (
+      <div
+        className="space-y-3 rounded-lg border border-destructive/20 bg-destructive/5 p-6 text-center"
+        role="alert"
+      >
+        <h1 className="font-semibold">Settings unavailable</h1>
+        <p className="text-sm text-destructive">
+          {loadError ?? "Could not load restaurant settings."}
+        </p>
+        <Button variant="outline" onClick={retry}>
+          Try again
+        </Button>
+      </div>
+    );
   }
+
+  if (!form)
+    return (
+      <p role="status" className="py-10 text-sm text-muted-foreground">
+        Preparing settings…
+      </p>
+    );
 
   const setHour = (day: DayKey, field: "open" | "close" | "closed", value: string | boolean) => {
     setForm((prev) => {
@@ -95,13 +117,13 @@ function SettingsPage() {
   };
 
   const handleSave = async () => {
-    if (!form) return;
+    if (!form || saving) return;
     setFormError(null);
 
     // Validate delivery fee
     const fee = Number(form.deliveryFeeEuros);
     if (Number.isNaN(fee) || fee < 0 || fee > 100) {
-      setFormError("Delivery fee must be between 0 and 100 euros.");
+      setFormError(`Delivery fee must be between 0 and 100 ${appConfig.currency}.`);
       return;
     }
     const deliveryFeeCents = Math.round(fee * 100);
@@ -135,166 +157,251 @@ function SettingsPage() {
       await save(patch);
       toast.success("Settings saved");
     } catch (err) {
-      if (err instanceof NetworkError) {
-        toast.error("Could not reach the server.");
-      } else if (err instanceof ApiError) {
-        toast.error(err.message);
-      } else {
-        toast.error("Failed to save settings.");
-      }
+      const message =
+        err instanceof NetworkError
+          ? "Could not reach the server."
+          : err instanceof ApiError
+            ? err.message
+            : err instanceof Error
+              ? err.message
+              : "Failed to save settings.";
+      setFormError(message);
+      toast.error(message);
     }
   };
 
-  const statusBadge = (() => {
-    if (form.isPaused) {
-      return <Badge tone="danger">Paused</Badge>;
-    }
-    if (!openStatus) return null;
-    if (openStatus.isOpen) return <Badge tone="success">Open right now</Badge>;
-    return <Badge tone="warning">Closed right now</Badge>;
-  })();
+  const presentation = getSettingsPresentation(
+    settings.isPaused,
+    openStatus?.isOpen ?? null,
+    form.isPaused,
+  );
+  const savedStatus = {
+    paused: "Paused",
+    open: "Open right now",
+    closed: "Closed right now",
+    unknown: "Status unavailable",
+  }[presentation.savedService];
+  const hasChanges =
+    form.isPaused !== settings.isPaused ||
+    form.pauseMessage !== (settings.pauseMessage ?? "") ||
+    form.deliveryFeeEuros !== (settings.deliveryFee / 100).toFixed(2) ||
+    DAYS.some(({ key }) => {
+      const saved = settings.hours[key];
+      const draft = form.hours[key];
+      return (
+        draft.closed !== (!saved.open || !saved.close) ||
+        draft.open !== (saved.open ?? "10:00") ||
+        draft.close !== (saved.close ?? "22:00")
+      );
+    });
 
   return (
-    <div className="space-y-8 max-w-3xl">
+    <div className="space-y-6">
       <div>
-        <div className="flex items-center gap-3 flex-wrap">
-          <h1 className="text-2xl font-semibold tracking-tight">Restaurant settings</h1>
-          {statusBadge}
-        </div>
-        <p className="text-sm text-muted-foreground mt-1">
-          Hours, delivery fee, and pause control. All times use {appConfig.businessTimeZone}.
+        <h1 className="text-2xl font-semibold tracking-tight">Restaurant settings</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Saved service status, hours and delivery fee. All times use {appConfig.businessTimeZone}.
         </p>
       </div>
 
-      {/* Pause section */}
-      <section className="space-y-4 border border-border rounded-lg p-6">
-        <div className="flex items-start justify-between gap-4">
-          <div>
-            <h2 className="text-lg font-semibold">Pause new orders</h2>
-            <p className="text-sm text-muted-foreground mt-1">
-              When paused, customers see a message and can't place orders. Use this when you're
-              slammed.
-            </p>
-          </div>
-          <Switch
-            checked={form.isPaused}
-            onCheckedChange={(v) => setForm((prev) => (prev ? { ...prev, isPaused: v } : prev))}
-          />
-        </div>
-
-        {form.isPaused && (
-          <div className="space-y-2">
-            <Label htmlFor="pauseMessage">Message for customers</Label>
-            <Textarea
-              id="pauseMessage"
-              value={form.pauseMessage}
-              onChange={(e) =>
-                setForm((prev) => (prev ? { ...prev, pauseMessage: e.target.value } : prev))
-              }
-              placeholder={DEFAULT_PAUSE_MESSAGE}
-              maxLength={300}
-              rows={2}
-            />
-            <p className="text-xs text-muted-foreground">
-              Leave blank to use the default: "{DEFAULT_PAUSE_MESSAGE}"
-            </p>
-          </div>
-        )}
-      </section>
-
-      {/* Delivery fee */}
-      <section className="space-y-4 border border-border rounded-lg p-6">
-        <div>
-          <h2 className="text-lg font-semibold">Delivery fee</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Charged on every order. Historical orders keep their original fee.
-          </p>
-        </div>
-        <div className="flex items-center gap-2 max-w-[180px]">
-          <Input
-            type="number"
-            step="0.10"
-            min="0"
-            max="100"
-            value={form.deliveryFeeEuros}
-            onChange={(e) =>
-              setForm((prev) => (prev ? { ...prev, deliveryFeeEuros: e.target.value } : prev))
-            }
-          />
-          <span className="text-sm text-muted-foreground">€</span>
-        </div>
-      </section>
-
-      {/* Opening hours */}
-      <section className="space-y-4 border border-border rounded-lg p-6">
-        <div>
-          <h2 className="text-lg font-semibold">Opening hours</h2>
-          <p className="text-sm text-muted-foreground mt-1">
-            Outside these hours, customers see a "closed" banner and can't order. A closing time
-            earlier than opening means service continues overnight.
-          </p>
-        </div>
-
-        <div className="space-y-3">
-          {DAYS.map(({ key, label }) => {
-            const h = form.hours[key];
-            return (
-              <div
-                key={key}
-                className="grid grid-cols-1 md:grid-cols-[120px_auto_1fr_1fr] items-center gap-3"
-              >
-                <span className="font-medium text-sm">{label}</span>
-                <div className="flex items-center gap-2">
-                  <Switch
-                    id={`${key}-open`}
-                    checked={!h.closed}
-                    onCheckedChange={(v) => setHour(key, "closed", !v)}
-                  />
-                  <Label htmlFor={`${key}-open`} className="text-xs text-muted-foreground">
-                    {h.closed ? "Closed" : "Open"}
-                  </Label>
-                </div>
-                <Input
-                  type="time"
-                  value={h.open}
-                  disabled={h.closed}
-                  onChange={(e) => setHour(key, "open", e.target.value)}
-                  className="font-mono"
-                />
-                <Input
-                  type="time"
-                  value={h.close}
-                  disabled={h.closed}
-                  onChange={(e) => setHour(key, "close", e.target.value)}
-                  className="font-mono"
-                />
+      <fieldset disabled={saving} className="min-w-0 space-y-6">
+        <legend className="sr-only">Restaurant settings draft</legend>
+        <section className="rounded-lg border border-border bg-background p-4 sm:p-6">
+          <div className="flex flex-wrap items-center justify-between gap-4">
+            <div className="space-y-2">
+              <div className="flex flex-wrap items-center gap-2">
+                <Badge
+                  tone={
+                    presentation.savedService === "paused"
+                      ? "danger"
+                      : presentation.savedService === "open"
+                        ? "success"
+                        : "warning"
+                  }
+                >
+                  {savedStatus} · Saved status
+                </Badge>
+                {presentation.draftPause !== null && (
+                  <Badge tone="warning">
+                    Unsaved {presentation.draftPause ? "pause" : "resume"}
+                  </Badge>
+                )}
               </div>
-            );
-          })}
-        </div>
-      </section>
+              <h2 className="text-lg font-semibold">New orders</h2>
+              <p className="max-w-xl text-sm text-muted-foreground">
+                When paused, customers see your message and cannot place orders. Changes take effect
+                only after saving all settings.
+              </p>
+            </div>
+            <div className="flex items-center gap-3 rounded-md border border-border px-3 py-2">
+              <Label htmlFor="pause-orders">Pause new orders</Label>
+              <Switch
+                id="pause-orders"
+                checked={form.isPaused}
+                onCheckedChange={(v) => setForm((prev) => (prev ? { ...prev, isPaused: v } : prev))}
+              />
+            </div>
+          </div>
+          {presentation.draftPause !== null && (
+            <p
+              className="mt-3 text-sm font-medium text-amber-800 dark:text-amber-200"
+              role="status"
+            >
+              {presentation.draftPause
+                ? "Pause is a draft. The saved service status above still applies."
+                : "Resume is a draft. New orders are still paused."}
+            </p>
+          )}
+        </section>
 
-      {/* Form error + save */}
+        <div className="grid min-w-0 gap-6 xl:grid-cols-[minmax(0,2fr)_minmax(0,1fr)]">
+          <section className="min-w-0 space-y-4 rounded-lg border border-border bg-background p-4 sm:p-6">
+            <div>
+              <h2 className="text-lg font-semibold">Opening hours</h2>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Outside these hours customers cannot order. A closing time earlier than opening
+                continues into the next day.
+              </p>
+            </div>
+            <div className="space-y-4">
+              {DAYS.map(({ key, label }) => {
+                const h = form.hours[key];
+                const overnight =
+                  !h.closed && isValidHoursPair(h.open, h.close) && h.close < h.open;
+                return (
+                  <div
+                    key={key}
+                    className="grid min-w-0 grid-cols-2 items-start gap-3 border-t border-border pt-4 sm:grid-cols-[minmax(5rem,0.8fr)_minmax(0,1fr)_minmax(0,1fr)]"
+                  >
+                    <div className="col-span-2 flex items-center justify-between gap-3 sm:col-span-1 sm:block sm:space-y-2">
+                      <p className="text-sm font-semibold">{label}</p>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id={`${key}-open`}
+                          checked={!h.closed}
+                          onCheckedChange={(v) => setHour(key, "closed", !v)}
+                          aria-label={`${label} open`}
+                        />
+                        <Label htmlFor={`${key}-open`} className="text-xs text-muted-foreground">
+                          {h.closed ? "Closed" : "Open"}
+                        </Label>
+                      </div>
+                    </div>
+                    <div className="min-w-0 space-y-1.5">
+                      <Label htmlFor={`${key}-opening`} className="text-xs">
+                        <span className="sr-only">{label} </span>Opening
+                      </Label>
+                      <Input
+                        id={`${key}-opening`}
+                        type="time"
+                        value={h.open}
+                        disabled={h.closed}
+                        onChange={(e) => setHour(key, "open", e.target.value)}
+                        className="min-w-0 w-full font-mono"
+                      />
+                    </div>
+                    <div className="min-w-0 space-y-1.5">
+                      <Label htmlFor={`${key}-closing`} className="text-xs">
+                        <span className="sr-only">{label} </span>Closing
+                      </Label>
+                      <Input
+                        id={`${key}-closing`}
+                        type="time"
+                        value={h.close}
+                        disabled={h.closed}
+                        onChange={(e) => setHour(key, "close", e.target.value)}
+                        className="min-w-0 w-full font-mono"
+                        aria-describedby={overnight ? `${key}-overnight` : undefined}
+                      />
+                      {overnight && (
+                        <p
+                          id={`${key}-overnight`}
+                          className="text-xs font-medium text-muted-foreground"
+                        >
+                          Next day
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
+
+          <div className="min-w-0 space-y-6">
+            <section className="space-y-4 rounded-lg border border-border bg-background p-4 sm:p-6">
+              <div>
+                <h2 className="text-lg font-semibold">Delivery fee</h2>
+                <p className="mt-1 text-sm text-muted-foreground">
+                  Applied to delivery orders. Pickup has no delivery fee. Historical orders keep
+                  their original fee.
+                </p>
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="delivery-fee">Fee in {appConfig.currency}</Label>
+                <Input
+                  id="delivery-fee"
+                  type="number"
+                  step="0.10"
+                  min="0"
+                  max="100"
+                  value={form.deliveryFeeEuros}
+                  onChange={(e) =>
+                    setForm((prev) => (prev ? { ...prev, deliveryFeeEuros: e.target.value } : prev))
+                  }
+                />
+                <p className="text-xs text-muted-foreground">
+                  Use Save settings below to apply this draft.
+                </p>
+              </div>
+            </section>
+            <section className="space-y-4 rounded-lg border border-border bg-background p-4 sm:p-6">
+              <h2 className="text-lg font-semibold">Customer pause message</h2>
+              <div className="space-y-2">
+                <Label htmlFor="pauseMessage">Message shown while paused</Label>
+                <Textarea
+                  id="pauseMessage"
+                  value={form.pauseMessage}
+                  onChange={(e) =>
+                    setForm((prev) => (prev ? { ...prev, pauseMessage: e.target.value } : prev))
+                  }
+                  placeholder={DEFAULT_PAUSE_MESSAGE}
+                  maxLength={300}
+                  rows={3}
+                />
+                <p className="text-xs text-muted-foreground">
+                  Leave blank to use the default: "{DEFAULT_PAUSE_MESSAGE}"
+                </p>
+              </div>
+            </section>
+          </div>
+        </div>
+      </fieldset>
+
       {formError && (
-        <div className="flex items-start gap-2 text-sm text-destructive bg-destructive/5 border border-destructive/20 rounded p-3">
-          <AlertCircle className="h-4 w-4 mt-0.5 shrink-0" />
+        <div
+          role="alert"
+          className="flex items-start gap-2 rounded-md border border-destructive/20 bg-destructive/5 p-3 text-sm text-destructive"
+        >
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
           <span>{formError}</span>
         </div>
       )}
-
-      <div className="flex justify-end gap-3">
-        <Button onClick={handleSave} disabled={saving} size="lg">
+      <div className="sticky bottom-3 flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border bg-background/95 p-3 shadow-sm backdrop-blur">
+        <p className="text-sm text-muted-foreground" role="status">
+          {saving
+            ? "Saving all settings…"
+            : hasChanges
+              ? "Unsaved changes · saved service status still applies"
+              : "All changes saved"}
+        </p>
+        <Button onClick={handleSave} disabled={saving} className="min-h-11">
           {saving ? (
-            <>
-              <Loader2 className="h-4 w-4 animate-spin mr-2" />
-              Saving…
-            </>
+            <Loader2 className="h-4 w-4 animate-spin" aria-hidden />
           ) : (
-            <>
-              <Save className="h-4 w-4 mr-2" />
-              Save changes
-            </>
+            <Save className="h-4 w-4" aria-hidden />
           )}
+          {saving ? "Saving…" : "Save settings"}
         </Button>
       </div>
     </div>

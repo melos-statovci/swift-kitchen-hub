@@ -13,6 +13,8 @@ export function useCategories() {
   const [categories, setCategories] = useState<Category[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
+  const [loadVersion, setLoadVersion] = useState(0);
+  const retry = useCallback(() => setLoadVersion((version) => version + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -38,7 +40,7 @@ export function useCategories() {
       cancelled = true;
       ac.abort();
     };
-  }, []);
+  }, [loadVersion]);
 
   const sorted = useMemo(
     () => [...categories].sort((a, b) => a.sortOrder - b.sortOrder),
@@ -124,6 +126,7 @@ export function useCategories() {
     categories: sorted,
     loading,
     loadError,
+    retry,
     createCategory,
     renameCategory,
     deleteCategory,

@@ -1,3 +1,5 @@
+import { useEffect, useState } from "react";
+import { toast } from "sonner";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -17,12 +19,40 @@ export type DeleteUserDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user: StaffUser | null;
-  onConfirm: (id: string) => void;
+  onConfirm: (id: string) => Promise<void>;
 };
 
 export function DeleteUserDialog({ open, onOpenChange, user, onConfirm }: DeleteUserDialogProps) {
+  const [pending, setPending] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (open) setError(null);
+  }, [open]);
+
+  const handleConfirm = async () => {
+    if (!user || pending) return;
+    setPending(true);
+    setError(null);
+    try {
+      await onConfirm(user.id);
+      onOpenChange(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to delete account";
+      setError(message);
+      toast.error(message);
+    } finally {
+      setPending(false);
+    }
+  };
+
   return (
-    <AlertDialog open={open} onOpenChange={onOpenChange}>
+    <AlertDialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!pending) onOpenChange(next);
+      }}
+    >
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete {user?.name ?? "this user"}'s account?</AlertDialogTitle>
@@ -31,15 +61,22 @@ export function DeleteUserDialog({ open, onOpenChange, user, onConfirm }: Delete
             undone.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        {error && (
+          <p role="alert" className="text-sm text-destructive">
+            {error}
+          </p>
+        )}
         <AlertDialogFooter>
-          <AlertDialogCancel>Cancel</AlertDialogCancel>
+          <AlertDialogCancel disabled={pending}>Cancel</AlertDialogCancel>
           <AlertDialogAction
             className={cn(buttonVariants({ variant: "destructive" }))}
-            onClick={() => {
-              if (user) onConfirm(user.id);
+            disabled={pending || !user}
+            onClick={(event) => {
+              event.preventDefault();
+              void handleConfirm();
             }}
           >
-            Delete
+            {pending ? "Deleting…" : "Delete"}
           </AlertDialogAction>
         </AlertDialogFooter>
       </AlertDialogContent>

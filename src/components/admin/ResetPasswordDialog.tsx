@@ -31,8 +31,7 @@ const schema = z.object({
 type Values = z.infer<typeof schema>;
 
 function generatePassword(length = 16): string {
-  const charset =
-    "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*";
+  const charset = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghijkmnopqrstuvwxyz23456789!@#$%^&*";
   let out = "";
   const arr = new Uint32Array(length);
   crypto.getRandomValues(arr);
@@ -46,7 +45,7 @@ export type ResetPasswordDialogProps = {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   user: StaffUser | null;
-  onConfirm: (id: string, newPassword: string) => void;
+  onConfirm: (id: string, newPassword: string) => Promise<void>;
 };
 
 export function ResetPasswordDialog({
@@ -77,14 +76,27 @@ export function ResetPasswordDialog({
     }
   };
 
-  const onSubmit = (values: Values) => {
+  const submitting = form.formState.isSubmitting;
+  const onSubmit = async (values: Values) => {
     if (!user) return;
-    onConfirm(user.id, values.password);
-    onOpenChange(false);
+    form.clearErrors("root");
+    try {
+      await onConfirm(user.id, values.password);
+      onOpenChange(false);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : "Failed to reset password";
+      form.setError("root.server", { message });
+      toast.error(message);
+    }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!submitting) onOpenChange(next);
+      }}
+    >
       <DialogContent>
         <DialogHeader>
           <DialogTitle>Reset password</DialogTitle>
@@ -95,37 +107,46 @@ export function ResetPasswordDialog({
           </DialogDescription>
         </DialogHeader>
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="password"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>New password</FormLabel>
-                  <div className="flex gap-2">
-                    <FormControl>
-                      <Input type="text" autoComplete="new-password" {...field} />
-                    </FormControl>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={handleGenerate}
-                      className="shrink-0"
-                    >
-                      <Wand2 className="h-4 w-4" />
-                      Generate
-                    </Button>
-                  </div>
-                  <FormMessage />
-                </FormItem>
+          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4" aria-busy={submitting}>
+            <fieldset disabled={submitting} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="password"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>New password</FormLabel>
+                    <div className="flex gap-2">
+                      <FormControl>
+                        <Input type="text" autoComplete="new-password" {...field} />
+                      </FormControl>
+                      <Button
+                        type="button"
+                        variant="outline"
+                        onClick={handleGenerate}
+                        className="shrink-0"
+                      >
+                        <Wand2 className="h-4 w-4" />
+                        Generate
+                      </Button>
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+              {form.formState.errors.root?.server?.message && (
+                <p role="alert" className="text-sm text-destructive">
+                  {form.formState.errors.root.server.message}
+                </p>
               )}
-            />
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                Cancel
-              </Button>
-              <Button type="submit">Reset password</Button>
-            </DialogFooter>
+              <DialogFooter className="gap-2">
+                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                  Cancel
+                </Button>
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? "Resetting…" : "Reset password"}
+                </Button>
+              </DialogFooter>
+            </fieldset>
           </form>
         </Form>
       </DialogContent>

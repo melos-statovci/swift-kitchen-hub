@@ -9,7 +9,7 @@ import { StaffTable } from "@/components/admin/StaffTable";
 import { StaffFormDialog } from "@/components/admin/StaffFormDialog";
 import { ResetPasswordDialog } from "@/components/admin/ResetPasswordDialog";
 import { DeleteUserDialog } from "@/components/admin/DeleteUserDialog";
-import { CantDeleteSelfError, OnlyAdminError, useUsers } from "@/hooks/useUsers";
+import { useUsers } from "@/hooks/useUsers";
 import type { StaffUser, UserRole } from "@/lib/types";
 import { appConfig } from "@/lib/config";
 
@@ -75,24 +75,8 @@ function AdminDashboard() {
   };
 
   const handleDelete = async (id: string) => {
-    try {
-      await deleteUser(id);
-      toast.success("Account deleted.");
-      close();
-    } catch (err) {
-      if (err instanceof OnlyAdminError) {
-        toast.error("Cannot delete the only admin account.");
-        close();
-        return;
-      }
-      if (err instanceof CantDeleteSelfError) {
-        toast.error("You can't delete your own account while logged in.");
-        close();
-        return;
-      }
-      toast.error(err instanceof Error ? err.message : "Failed to delete account");
-      close();
-    }
+    await deleteUser(id);
+    toast.success("Account deleted.");
   };
 
   return (
@@ -104,7 +88,7 @@ function AdminDashboard() {
             Manage who can access {appConfig.restaurantName} and what they can do.
           </p>
         </div>
-        <Button onClick={() => setDialog({ kind: "create" })} disabled={loading}>
+        <Button onClick={() => setDialog({ kind: "create" })} disabled={loading || !!loadError}>
           <Plus className="h-4 w-4" />
           Add staff
         </Button>
@@ -116,8 +100,11 @@ function AdminDashboard() {
           <p className="text-sm">Loading staff…</p>
         </div>
       ) : loadError ? (
-        <div className="text-center py-20 text-destructive">
+        <div role="alert" className="space-y-3 text-center py-20 text-destructive">
           <p>{loadError}</p>
+          <Button variant="outline" onClick={() => window.location.reload()}>
+            Retry staff
+          </Button>
         </div>
       ) : users.length === 0 ? (
         <EmptyState onAdd={() => setDialog({ kind: "create" })} />

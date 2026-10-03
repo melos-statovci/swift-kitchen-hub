@@ -34,11 +34,28 @@ import type { StaffUser, UserRole } from "@/lib/types";
 import { DuplicateEmailError } from "@/hooks/useUsers";
 import { appConfig } from "@/lib/config";
 
-const ROLES: { value: UserRole; label: string }[] = [
-  { value: "admin", label: "Admin" },
-  { value: "acceptance", label: "Acceptance" },
-  { value: "kitchen", label: "Kitchen" },
-  { value: "driver", label: "Driver" },
+const ROLES: { value: UserRole; label: string; description: string }[] = [
+  {
+    value: "admin",
+    label: "Admin",
+    description: "All order workflows, menu, staff and restaurant settings.",
+  },
+  {
+    value: "acceptance",
+    label: "Acceptance",
+    description: "Review incoming orders, manage handoff and read the order archive.",
+  },
+  {
+    value: "kitchen",
+    label: "Kitchen",
+    description: "Prepare accepted orders and mark them ready for handoff.",
+  },
+  {
+    value: "driver",
+    label: "Driver",
+    description:
+      "Claim delivery orders and complete your deliveries. Pickup stays with the restaurant.",
+  },
 ];
 
 const baseFields = {
@@ -98,9 +115,12 @@ export function StaffFormDialog({
   });
 
   const [emailChanged, setEmailChanged] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
+  const submitting = isCreate ? createForm.formState.isSubmitting : editForm.formState.isSubmitting;
 
   useEffect(() => {
     if (!open) return;
+    setSaveError(null);
     if (isCreate) {
       createForm.reset({ name: "", email: "", role: "acceptance", password: "" });
     } else if (user) {
@@ -123,6 +143,7 @@ export function StaffFormDialog({
   };
 
   const submitCreate = async (values: CreateValues) => {
+    setSaveError(null);
     try {
       await onCreate(values);
       onOpenChange(false);
@@ -131,12 +152,15 @@ export function StaffFormDialog({
         createForm.setError("email", { message: "An account with this email already exists" });
         return;
       }
-      toast.error(err instanceof Error ? err.message : "Failed to create account");
+      const message = err instanceof Error ? err.message : "Failed to create account";
+      setSaveError(message);
+      toast.error(message);
     }
   };
 
   const submitEdit = async (values: EditValues) => {
     if (!user) return;
+    setSaveError(null);
     try {
       await onUpdate(user.id, values);
       onOpenChange(false);
@@ -145,13 +169,20 @@ export function StaffFormDialog({
         editForm.setError("email", { message: "An account with this email already exists" });
         return;
       }
-      toast.error(err instanceof Error ? err.message : "Failed to update account");
+      const message = err instanceof Error ? err.message : "Failed to update account";
+      setSaveError(message);
+      toast.error(message);
     }
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!submitting) onOpenChange(next);
+      }}
+    >
+      <DialogContent className="max-h-[calc(100dvh-2rem)] w-[calc(100%-1rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{isCreate ? "Create staff account" : "Edit staff account"}</DialogTitle>
           <DialogDescription>
@@ -163,161 +194,193 @@ export function StaffFormDialog({
 
         {isCreate ? (
           <Form {...createForm}>
-            <form onSubmit={createForm.handleSubmit(submitCreate)} className="space-y-4">
-              <FormField
-                control={createForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input autoComplete="off" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={createForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input type="email" autoComplete="off" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={createForm.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Role</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+            <form
+              onSubmit={createForm.handleSubmit(submitCreate)}
+              className="space-y-4"
+              aria-busy={submitting}
+            >
+              <fieldset disabled={submitting} className="space-y-4">
+                <FormField
+                  control={createForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a role" />
-                        </SelectTrigger>
+                        <Input autoComplete="off" {...field} />
                       </FormControl>
-                      <SelectContent>
-                        {ROLES.map((r) => (
-                          <SelectItem key={r.value} value={r.value}>
-                            {r.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={createForm.control}
-                name="password"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Password</FormLabel>
-                    <div className="flex gap-2">
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
                       <FormControl>
-                        <Input type="text" autoComplete="new-password" {...field} />
+                        <Input type="email" autoComplete="off" {...field} />
                       </FormControl>
-                      <Button
-                        type="button"
-                        variant="outline"
-                        onClick={handleGenerate}
-                        className="shrink-0"
-                      >
-                        <Wand2 className="h-4 w-4" />
-                        Generate
-                      </Button>
-                    </div>
-                    <FormMessage />
-                  </FormItem>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createForm.control}
+                  name="role"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Role</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a role" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {ROLES.map((r) => (
+                            <SelectItem key={r.value} value={r.value}>
+                              {r.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {ROLES.find((role) => role.value === field.value)?.description}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={createForm.control}
+                  name="password"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Password</FormLabel>
+                      <div className="flex gap-2">
+                        <FormControl>
+                          <Input type="text" autoComplete="new-password" {...field} />
+                        </FormControl>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={handleGenerate}
+                          className="shrink-0"
+                        >
+                          <Wand2 className="h-4 w-4" />
+                          Generate
+                        </Button>
+                      </div>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {saveError && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {saveError}
+                  </p>
                 )}
-              />
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">Create account</Button>
-              </DialogFooter>
+                <DialogFooter className="gap-2">
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={submitting}>
+                    {submitting ? "Creating…" : "Create account"}
+                  </Button>
+                </DialogFooter>
+              </fieldset>
             </form>
           </Form>
         ) : (
           <Form {...editForm}>
-            <form onSubmit={editForm.handleSubmit(submitEdit)} className="space-y-4">
-              <FormField
-                control={editForm.control}
-                name="name"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Name</FormLabel>
-                    <FormControl>
-                      <Input autoComplete="off" {...field} />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editForm.control}
-                name="email"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Email</FormLabel>
-                    <FormControl>
-                      <Input
-                        type="email"
-                        autoComplete="off"
-                        {...field}
-                        onChange={(e) => {
-                          field.onChange(e);
-                          setEmailChanged(e.target.value !== user?.email);
-                        }}
-                      />
-                    </FormControl>
-                    {emailChanged && (
-                      <FormDescription>
-                        Changing email will require the user to log in with the new address.
-                      </FormDescription>
-                    )}
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              <FormField
-                control={editForm.control}
-                name="role"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Role</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
+            <form
+              onSubmit={editForm.handleSubmit(submitEdit)}
+              className="space-y-4"
+              aria-busy={submitting}
+            >
+              <fieldset disabled={submitting} className="space-y-4">
+                <FormField
+                  control={editForm.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Name</FormLabel>
                       <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a role" />
-                        </SelectTrigger>
+                        <Input autoComplete="off" {...field} />
                       </FormControl>
-                      <SelectContent>
-                        {ROLES.map((r) => (
-                          <SelectItem key={r.value} value={r.value}>
-                            {r.label}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="email"
+                          autoComplete="off"
+                          {...field}
+                          onChange={(e) => {
+                            field.onChange(e);
+                            setEmailChanged(e.target.value !== user?.email);
+                          }}
+                        />
+                      </FormControl>
+                      {emailChanged && (
+                        <FormDescription>
+                          Changing email will require the user to log in with the new address.
+                        </FormDescription>
+                      )}
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={editForm.control}
+                  name="role"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Role</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Select a role" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          {ROLES.map((r) => (
+                            <SelectItem key={r.value} value={r.value}>
+                              {r.label}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        {ROLES.find((role) => role.value === field.value)?.description}
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                {saveError && (
+                  <p role="alert" className="text-sm text-destructive">
+                    {saveError}
+                  </p>
                 )}
-              />
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit">Save changes</Button>
-              </DialogFooter>
+                <DialogFooter className="gap-2">
+                  <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+                    Cancel
+                  </Button>
+                  <Button type="submit" disabled={submitting}>
+                    {submitting ? "Saving…" : "Save changes"}
+                  </Button>
+                </DialogFooter>
+              </fieldset>
             </form>
           </Form>
         )}

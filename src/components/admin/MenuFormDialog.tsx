@@ -35,20 +35,11 @@ import {
 import type { Category, MenuItem } from "@/lib/types";
 import type { CreateMenuItemInput, SaveVariantInput } from "@/hooks/useMenuItems";
 import { requiresExplicitFlatPrice } from "@/lib/menuPricing";
+import { createMenuFormSchema } from "@/lib/menuFormSchema";
+import { appConfig } from "@/lib/config";
 
-// `price` here is in EUROS (what the manager types); converted to cents on submit.
-const schema = z.object({
-  name: z.string().trim().min(1, "Name is required").max(120),
-  description: z.string().trim().max(1000).optional(),
-  price: z.coerce
-    .number({ invalid_type_error: "Enter a price" })
-    .min(0, "Price can't be negative")
-    .max(1000, "Price can't exceed €1,000"),
-  variantMode: z.enum(["NONE", "REQUIRED"]),
-  category: z.string().min(1, "Select a category"),
-  imageUrl: z.string().trim().url("Enter a valid image URL").or(z.literal("")).optional(),
-  available: z.boolean(),
-});
+// Managers enter currency units; the existing payload converts them to cents.
+const schema = createMenuFormSchema(appConfig.currency);
 
 type Values = z.infer<typeof schema>;
 
@@ -87,6 +78,7 @@ export function MenuFormDialog({
   const isCreate = mode === "create";
   const [variants, setVariants] = useState<VariantDraft[]>([]);
   const [requiresFlatPrice, setRequiresFlatPrice] = useState(false);
+  const [saveError, setSaveError] = useState<string | null>(null);
 
   const form = useForm<Values>({
     resolver: zodResolver(schema),
@@ -136,11 +128,14 @@ export function MenuFormDialog({
           })),
     );
     setRequiresFlatPrice(false);
+    setSaveError(null);
   }, [open, isCreate, item, categories, form]);
 
   const submit = async (values: Values) => {
+    setSaveError(null);
     if (values.variantMode === "REQUIRED") {
       if (variants.length === 0 || !variants.some((variant) => variant.available)) {
+        setSaveError("Add at least one available variant.");
         toast.error("Add at least one available variant.");
         return;
       }
@@ -153,12 +148,14 @@ export function MenuFormDialog({
             variant.priceEuros > 1000,
         )
       ) {
+        setSaveError("Every variant needs a name and a valid price.");
         toast.error("Every variant needs a name and a valid price.");
         return;
       }
     }
 
     if (values.variantMode === "NONE" && requiresFlatPrice) {
+      setSaveError("Enter the new flat price before saving.");
       toast.error("Enter the new flat price before saving.");
       return;
     }
@@ -192,7 +189,9 @@ export function MenuFormDialog({
       }
       onOpenChange(false);
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to save menu item");
+      const message = err instanceof Error ? err.message : "Failed to save menu item";
+      setSaveError(message);
+      toast.error(message);
     }
   };
 
@@ -229,11 +228,17 @@ export function MenuFormDialog({
   };
 
   const variantMode = form.watch("variantMode");
+  const submitting = form.formState.isSubmitting;
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent>
-        <DialogHeader>
+    <Dialog
+      open={open}
+      onOpenChange={(next) => {
+        if (!submitting) onOpenChange(next);
+      }}
+    >
+      <DialogContent className="flex max-h-[calc(100dvh-2rem)] w-[calc(100%-1rem)] max-w-2xl flex-col gap-0 overflow-hidden p-0">
+        <DialogHeader className="shrink-0 border-b border-border px-4 py-5 pr-10 sm:px-6 sm:pr-10">
           <DialogTitle>{isCreate ? "Add menu item" : "Edit menu item"}</DialogTitle>
           <DialogDescription>
             {isCreate
@@ -243,268 +248,326 @@ export function MenuFormDialog({
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(submit)} className="space-y-4">
-            <FormField
-              control={form.control}
-              name="name"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Name</FormLabel>
-                  <FormControl>
-                    <Input autoComplete="off" {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="description"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Description</FormLabel>
-                  <FormControl>
-                    <Textarea rows={3} {...field} />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="variantMode"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Pricing</FormLabel>
-                  <Select
-                    onValueChange={(nextMode: "NONE" | "REQUIRED") => {
-                      if (requiresExplicitFlatPrice(field.value, nextMode)) {
-                        form.setValue("price", undefined as never, {
-                          shouldDirty: false,
-                          shouldValidate: false,
-                        });
-                        setRequiresFlatPrice(true);
-                      } else if (nextMode === "REQUIRED") {
-                        setRequiresFlatPrice(false);
-                      }
-                      field.onChange(nextMode);
-                    }}
-                    value={field.value}
-                  >
-                    <FormControl>
-                      <SelectTrigger>
-                        <SelectValue />
-                      </SelectTrigger>
-                    </FormControl>
-                    <SelectContent>
-                      <SelectItem value="NONE">One flat price</SelectItem>
-                      <SelectItem value="REQUIRED">Customer chooses one variant</SelectItem>
-                    </SelectContent>
-                  </Select>
-                  <FormDescription>
-                    Use variants for sizes such as E Vogël, E Mesme, and E Madhe. Existing variants
-                    are retained if you switch back to a flat price.
-                  </FormDescription>
-                </FormItem>
-              )}
-            />
-
-            <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
-              {variantMode === "NONE" && (
+          <form
+            onSubmit={form.handleSubmit(submit)}
+            className="flex min-h-0 flex-1 flex-col overflow-hidden"
+            aria-busy={submitting}
+          >
+            <div className="min-h-0 flex-1 overflow-y-auto p-4 sm:p-6">
+              <fieldset disabled={submitting} className="min-w-0 space-y-4">
+                <legend className="sr-only">Menu item details</legend>
                 <FormField
                   control={form.control}
-                  name="price"
+                  name="name"
                   render={({ field }) => (
                     <FormItem>
-                      <FormLabel>Price (€)</FormLabel>
+                      <FormLabel>Name</FormLabel>
                       <FormControl>
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="1000"
-                          inputMode="decimal"
-                          {...field}
-                          value={field.value ?? ""}
-                          onChange={(event) => {
-                            const nextPrice = event.target.value;
-                            setRequiresFlatPrice(nextPrice === "");
-                            field.onChange(nextPrice === "" ? undefined : nextPrice);
-                          }}
-                          placeholder={requiresFlatPrice ? "Enter new flat price" : undefined}
-                        />
+                        <Input autoComplete="off" {...field} />
                       </FormControl>
-                      {requiresFlatPrice && (
-                        <FormDescription>
-                          Enter a new flat price explicitly before saving this mode change.
-                        </FormDescription>
-                      )}
                       <FormMessage />
                     </FormItem>
                   )}
                 />
-              )}
-              <FormField
-                control={form.control}
-                name="category"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Category</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger>
-                          <SelectValue placeholder="Select a category" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {categories.map((c) => (
-                          <SelectItem key={c.id} value={c.slug}>
-                            {c.name}
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            </div>
 
-            {variantMode === "REQUIRED" && (
-              <div className="space-y-3 rounded-md border border-border p-3">
-                <div className="flex items-center justify-between gap-3">
-                  <div>
-                    <div className="text-sm font-medium">Variants</div>
-                    <div className="text-xs text-muted-foreground">
-                      Order controls customer display order. Archived variants keep order history.
-                    </div>
-                  </div>
-                  <Button type="button" variant="outline" size="sm" onClick={addVariant}>
-                    <Plus className="h-4 w-4" />
-                    Add
-                  </Button>
+                <FormField
+                  control={form.control}
+                  name="description"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Description</FormLabel>
+                      <FormControl>
+                        <Textarea rows={3} {...field} />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="variantMode"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Pricing</FormLabel>
+                      <Select
+                        onValueChange={(nextMode: "NONE" | "REQUIRED") => {
+                          if (requiresExplicitFlatPrice(field.value, nextMode)) {
+                            form.setValue("price", undefined, {
+                              shouldDirty: false,
+                              shouldValidate: false,
+                            });
+                            setRequiresFlatPrice(true);
+                          } else if (nextMode === "REQUIRED") {
+                            setRequiresFlatPrice(false);
+                          }
+                          field.onChange(nextMode);
+                        }}
+                        value={field.value}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="NONE">One flat price</SelectItem>
+                          <SelectItem value="REQUIRED">Customer chooses one variant</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormDescription>
+                        Use variants when customers choose a size or option. Existing variants are
+                        retained if you switch back to a flat price.
+                      </FormDescription>
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                  {variantMode === "NONE" && (
+                    <FormField
+                      control={form.control}
+                      name="price"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Price ({appConfig.currency})</FormLabel>
+                          <FormControl>
+                            <Input
+                              type="number"
+                              step="0.01"
+                              min="0"
+                              max="1000"
+                              inputMode="decimal"
+                              {...field}
+                              value={field.value ?? ""}
+                              onChange={(event) => {
+                                const nextPrice = event.target.value;
+                                setRequiresFlatPrice(nextPrice === "");
+                                field.onChange(nextPrice === "" ? undefined : nextPrice);
+                              }}
+                              placeholder={requiresFlatPrice ? "Enter new flat price" : undefined}
+                            />
+                          </FormControl>
+                          {requiresFlatPrice && (
+                            <FormDescription>
+                              Enter a new flat price explicitly before saving this mode change.
+                            </FormDescription>
+                          )}
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+                  <FormField
+                    control={form.control}
+                    name="category"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Category</FormLabel>
+                        <Select onValueChange={field.onChange} value={field.value}>
+                          <FormControl>
+                            <SelectTrigger>
+                              <SelectValue placeholder="Select a category" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {categories.map((c) => (
+                              <SelectItem key={c.id} value={c.slug}>
+                                {c.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
                 </div>
 
-                {variants.length === 0 ? (
-                  <p className="rounded-md bg-muted/40 px-3 py-4 text-center text-sm text-muted-foreground">
-                    Add at least one available variant before saving.
-                  </p>
-                ) : (
-                  <div className="space-y-2">
-                    {variants.map((variant, index) => (
-                      <div
-                        key={variant.key}
-                        className="grid grid-cols-[1fr_7rem_auto] items-center gap-2 rounded-md bg-muted/30 p-2"
-                      >
-                        <Input
-                          value={variant.name}
-                          onChange={(event) =>
-                            updateVariantDraft(variant.key, { name: event.target.value })
-                          }
-                          placeholder="Variant name"
-                          aria-label={`Variant ${index + 1} name`}
-                        />
-                        <Input
-                          type="number"
-                          step="0.01"
-                          min="0"
-                          max="1000"
-                          inputMode="decimal"
-                          value={variant.priceEuros}
-                          onChange={(event) =>
-                            updateVariantDraft(variant.key, {
-                              priceEuros: Number(event.target.value),
-                            })
-                          }
-                          aria-label={`Variant ${index + 1} price in euros`}
-                        />
-                        <div className="flex items-center gap-1">
-                          <Switch
-                            checked={variant.available}
-                            onCheckedChange={(available) =>
-                              updateVariantDraft(variant.key, { available })
-                            }
-                            aria-label={`Variant ${index + 1} available`}
-                          />
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            disabled={index === 0}
-                            onClick={() => moveVariant(index, -1)}
-                            aria-label={`Move variant ${index + 1} up`}
-                          >
-                            <ArrowUp className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            disabled={index === variants.length - 1}
-                            onClick={() => moveVariant(index, 1)}
-                            aria-label={`Move variant ${index + 1} down`}
-                          >
-                            <ArrowDown className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            type="button"
-                            variant="ghost"
-                            size="icon"
-                            onClick={() => removeVariant(variant)}
-                            aria-label={`Remove variant ${index + 1}`}
-                          >
-                            <Trash2 className="h-4 w-4" />
-                          </Button>
+                {variantMode === "REQUIRED" && (
+                  <div className="space-y-3 rounded-md border border-border p-3">
+                    <div className="flex items-center justify-between gap-3">
+                      <div>
+                        <div className="text-sm font-medium">Variants</div>
+                        <div className="text-xs text-muted-foreground">
+                          Order controls customer display order. Archived variants keep order
+                          history.
                         </div>
                       </div>
-                    ))}
+                      <Button type="button" variant="outline" size="sm" onClick={addVariant}>
+                        <Plus className="h-4 w-4" />
+                        Add
+                      </Button>
+                    </div>
+
+                    {variants.length === 0 ? (
+                      <p className="rounded-md bg-muted/40 px-3 py-4 text-center text-sm text-muted-foreground">
+                        Add at least one available variant before saving.
+                      </p>
+                    ) : (
+                      <div className="space-y-2">
+                        {variants.map((variant, index) => (
+                          <div
+                            key={variant.key}
+                            className="grid grid-cols-[minmax(0,1fr)_6rem] items-start gap-3 rounded-md border border-border bg-muted/20 p-3"
+                          >
+                            <div className="min-w-0 space-y-1.5">
+                              <label
+                                htmlFor={`variant-${variant.key}-name`}
+                                className="text-xs font-medium"
+                              >
+                                Variant {index + 1} name
+                              </label>
+                              <Input
+                                id={`variant-${variant.key}-name`}
+                                className="min-w-0"
+                                value={variant.name}
+                                onChange={(event) =>
+                                  updateVariantDraft(variant.key, { name: event.target.value })
+                                }
+                                placeholder="Variant name"
+                              />
+                            </div>
+                            <div className="min-w-0 space-y-1.5">
+                              <label
+                                htmlFor={`variant-${variant.key}-price`}
+                                className="text-xs font-medium"
+                              >
+                                Price ({appConfig.currency})
+                              </label>
+                              <Input
+                                id={`variant-${variant.key}-price`}
+                                className="min-w-0 tabular-nums"
+                                type="number"
+                                step="0.01"
+                                min="0"
+                                max="1000"
+                                inputMode="decimal"
+                                value={variant.priceEuros}
+                                onChange={(event) =>
+                                  updateVariantDraft(variant.key, {
+                                    priceEuros: Number(event.target.value),
+                                  })
+                                }
+                                aria-label={`Variant ${index + 1} price in ${appConfig.currency}`}
+                              />
+                            </div>
+                            <div className="col-span-2 flex flex-wrap items-center justify-between gap-2">
+                              <div className="flex items-center gap-2">
+                                <Switch
+                                  id={`variant-${variant.key}-available`}
+                                  checked={variant.available}
+                                  onCheckedChange={(available) =>
+                                    updateVariantDraft(variant.key, { available })
+                                  }
+                                  aria-label={`Variant ${index + 1} available`}
+                                />
+                                <label
+                                  htmlFor={`variant-${variant.key}-available`}
+                                  className="text-xs text-muted-foreground"
+                                >
+                                  {variant.available ? "Available" : "Unavailable"}
+                                </label>
+                              </div>
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-11 w-11 sm:h-9 sm:w-9"
+                                  disabled={index === 0}
+                                  onClick={() => moveVariant(index, -1)}
+                                  aria-label={`Move variant ${index + 1} up`}
+                                >
+                                  <ArrowUp className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-11 w-11 sm:h-9 sm:w-9"
+                                  disabled={index === variants.length - 1}
+                                  onClick={() => moveVariant(index, 1)}
+                                  aria-label={`Move variant ${index + 1} down`}
+                                >
+                                  <ArrowDown className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  type="button"
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-11 w-11 sm:h-9 sm:w-9"
+                                  onClick={() => removeVariant(variant)}
+                                  aria-label={`Remove variant ${index + 1}`}
+                                >
+                                  <Trash2 className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
-              </div>
+
+                <FormField
+                  control={form.control}
+                  name="imageUrl"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Image URL</FormLabel>
+                      <FormControl>
+                        <Input type="url" placeholder="https://…" autoComplete="off" {...field} />
+                      </FormControl>
+                      <FormDescription>
+                        Paste a link to a hosted image. Leave blank for no photo.
+                      </FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="available"
+                  render={({ field }) => (
+                    <FormItem className="flex items-center justify-between rounded-md border border-border p-3">
+                      <div className="space-y-0.5">
+                        <FormLabel>Available</FormLabel>
+                        <FormDescription>
+                          When off, the item is hidden from the customer menu.
+                        </FormDescription>
+                      </div>
+                      <FormControl>
+                        <Switch checked={field.value} onCheckedChange={field.onChange} />
+                      </FormControl>
+                    </FormItem>
+                  )}
+                />
+              </fieldset>
+            </div>
+            {saveError && (
+              <p
+                role="alert"
+                className="shrink-0 border-t border-destructive/20 bg-destructive/5 px-4 py-3 text-sm text-destructive sm:px-6"
+              >
+                {saveError}
+              </p>
             )}
-
-            <FormField
-              control={form.control}
-              name="imageUrl"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Image URL</FormLabel>
-                  <FormControl>
-                    <Input type="url" placeholder="https://…" autoComplete="off" {...field} />
-                  </FormControl>
-                  <FormDescription>
-                    Paste a link to a hosted image. Leave blank for no photo.
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
-              name="available"
-              render={({ field }) => (
-                <FormItem className="flex items-center justify-between rounded-md border border-border p-3">
-                  <div className="space-y-0.5">
-                    <FormLabel>Available</FormLabel>
-                    <FormDescription>
-                      When off, the item is hidden from the customer menu.
-                    </FormDescription>
-                  </div>
-                  <FormControl>
-                    <Switch checked={field.value} onCheckedChange={field.onChange} />
-                  </FormControl>
-                </FormItem>
-              )}
-            />
-
-            <DialogFooter>
-              <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
+            <DialogFooter className="shrink-0 gap-2 border-t border-border bg-muted/20 p-4 sm:px-6">
+              <Button
+                type="button"
+                variant="outline"
+                disabled={submitting}
+                className="min-h-11 sm:min-h-9"
+                onClick={() => onOpenChange(false)}
+              >
                 Cancel
               </Button>
-              <Button type="submit">{isCreate ? "Add item" : "Save changes"}</Button>
+              <Button type="submit" disabled={submitting} className="min-h-11 sm:min-h-9">
+                {submitting ? "Saving…" : isCreate ? "Add item" : "Save changes"}
+              </Button>
             </DialogFooter>
           </form>
         </Form>

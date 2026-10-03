@@ -55,6 +55,8 @@ export function useSettings() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [saving, setSaving] = useState(false);
+  const [loadVersion, setLoadVersion] = useState(0);
+  const retry = useCallback(() => setLoadVersion((version) => version + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -82,7 +84,7 @@ export function useSettings() {
       cancelled = true;
       ac.abort();
     };
-  }, []);
+  }, [loadVersion]);
 
   const save = useCallback(async (patch: SettingsPatch): Promise<void> => {
     setSaving(true);
@@ -96,13 +98,20 @@ export function useSettings() {
       });
 
       // Refetch to get the canonical computed shape (openStatus etc.)
-      const fresh = await apiFetch<GetSettingsResponse>("/api/settings");
-      setSettings(fresh.settings);
-      setOpenStatus(fresh.openStatus);
+      try {
+        const fresh = await apiFetch<GetSettingsResponse>("/api/settings");
+        setSettings(fresh.settings);
+        setOpenStatus(fresh.openStatus);
+      } catch {
+        const message =
+          "Changes were sent, but saved settings could not be checked. Retry to confirm the service status.";
+        setError(message);
+        throw new Error(message);
+      }
     } finally {
       setSaving(false);
     }
   }, []);
 
-  return { settings, openStatus, loading, error, saving, save };
+  return { settings, openStatus, loading, error, saving, save, retry };
 }

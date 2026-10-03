@@ -61,12 +61,15 @@ function MenuDashboard() {
   const {
     categories,
     loading: categoriesLoading,
+    loadError: categoriesError,
+    retry: retryCategories,
     createCategory,
     renameCategory,
     deleteCategory,
     moveCategory,
   } = useCategories();
   const [dialog, setDialog] = useState<DialogState>({ kind: "none" });
+  const [availabilityPending, setAvailabilityPending] = useState<Set<string>>(new Set());
 
   const [searchInput, setSearchInput] = useState("");
   const [search, setSearch] = useState("");
@@ -113,22 +116,25 @@ function MenuDashboard() {
   };
 
   const handleToggleAvailable = async (item: MenuItem) => {
+    if (availabilityPending.has(item.id)) return;
+    setAvailabilityPending((pending) => new Set(pending).add(item.id));
     try {
       await patchMenuItem(item.id, { available: !item.available });
+      toast.success(`${item.name} is now ${item.available ? "unavailable" : "available"}`);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to update availability");
+    } finally {
+      setAvailabilityPending((pending) => {
+        const next = new Set(pending);
+        next.delete(item.id);
+        return next;
+      });
     }
   };
 
   const handleDelete = async (id: string) => {
-    try {
-      await deleteMenuItem(id);
-      toast.success("Item removed from the menu.");
-      close();
-    } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to remove item");
-      close();
-    }
+    await deleteMenuItem(id);
+    toast.success("Item removed from the menu.");
   };
 
   return (
@@ -148,6 +154,20 @@ function MenuDashboard() {
 
         {/* ---- Items ---- */}
         <TabsContent value="items" className="space-y-6">
+          {categoriesError && (
+            <div
+              role="alert"
+              className="flex flex-wrap items-center justify-between gap-3 rounded-md border border-destructive/20 bg-destructive/5 p-3 text-sm"
+            >
+              <p>
+                Categories unavailable: {categoriesError} Item editing is unavailable until
+                categories load.
+              </p>
+              <Button variant="outline" onClick={retryCategories} disabled={categoriesLoading}>
+                Retry categories
+              </Button>
+            </div>
+          )}
           <div className="flex items-center justify-between gap-3">
             <div className="relative max-w-sm flex-1">
               <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -161,7 +181,9 @@ function MenuDashboard() {
             </div>
             <Button
               onClick={() => setDialog({ kind: "create" })}
-              disabled={loading || categoriesLoading || categories.length === 0}
+              disabled={
+                loading || categoriesLoading || !!categoriesError || categories.length === 0
+              }
             >
               <Plus className="h-4 w-4" />
               Add item
@@ -174,8 +196,11 @@ function MenuDashboard() {
               <p className="text-sm">Loading menu…</p>
             </div>
           ) : loadError ? (
-            <div className="text-center py-20 text-destructive">
+            <div role="alert" className="space-y-3 text-center py-20 text-destructive">
               <p>{loadError}</p>
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Retry menu
+              </Button>
             </div>
           ) : items.length === 0 ? (
             <EmptyState
@@ -212,6 +237,7 @@ function MenuDashboard() {
                         <TableCell className="text-center">
                           <Switch
                             checked={item.available}
+                            disabled={availabilityPending.has(item.id)}
                             onCheckedChange={() => handleToggleAvailable(item)}
                             aria-label={`Toggle availability for ${item.name}`}
                           />
@@ -228,7 +254,10 @@ function MenuDashboard() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onSelect={() => setDialog({ kind: "edit", item })}>
+                              <DropdownMenuItem
+                                disabled={categoriesLoading || !!categoriesError}
+                                onSelect={() => setDialog({ kind: "edit", item })}
+                              >
                                 Edit
                               </DropdownMenuItem>
                               <DropdownMenuItem
@@ -261,6 +290,28 @@ function MenuDashboard() {
             <div className="flex flex-col items-center justify-center py-20 gap-3 text-muted-foreground">
               <Loader2 className="h-8 w-8 animate-spin" />
               <p className="text-sm">Loading categories…</p>
+            </div>
+          ) : categoriesError ? (
+            <div
+              role="alert"
+              className="space-y-3 rounded-md border border-destructive/20 bg-destructive/5 p-6 text-center"
+            >
+              <p className="text-sm text-destructive">{categoriesError}</p>
+              <Button variant="outline" onClick={retryCategories}>
+                Retry categories
+              </Button>
+            </div>
+          ) : loadError ? (
+            <div
+              role="alert"
+              className="space-y-3 rounded-md border border-destructive/20 bg-destructive/5 p-6 text-center"
+            >
+              <p className="text-sm">
+                Menu item counts are unavailable. Reload the menu before managing categories.
+              </p>
+              <Button variant="outline" onClick={() => window.location.reload()}>
+                Retry menu
+              </Button>
             </div>
           ) : (
             <CategoryManager
