@@ -9,8 +9,6 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Textarea } from "@/components/ui/textarea";
-import { Badge } from "@/components/ui/badge";
-import { cn } from "@/lib/utils";
 
 const PRESETS = ["Out of stock", "Too far", "Closing soon", "Other"];
 
@@ -50,22 +48,31 @@ export function DeclineDialog({ orderNumber, open, onOpenChange, onConfirm }: Pr
         </DialogHeader>
 
         <div className="space-y-3">
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-2" role="group" aria-label="Common decline reasons">
             {PRESETS.map((preset) => (
-              <Badge
+              <Button
                 key={preset}
+                type="button"
                 variant={activePreset === preset ? "default" : "outline"}
-                className={cn("cursor-pointer px-3 py-1.5 text-xs")}
+                className="h-10 px-3 text-xs"
+                aria-pressed={activePreset === preset}
                 onClick={() => pickPreset(preset)}
               >
                 {preset}
-              </Badge>
+              </Button>
             ))}
           </div>
+          <label htmlFor="decline-reason" className="text-sm font-medium">
+            Reason (optional)
+          </label>
           <Textarea
+            id="decline-reason"
             placeholder="Reason (optional)"
             value={reason}
-            onChange={(e) => setReason(e.target.value)}
+            onChange={(e) => {
+              setReason(e.target.value);
+              setActivePreset("Other");
+            }}
             rows={3}
           />
         </div>

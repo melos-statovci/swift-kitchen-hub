@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { Archive } from "lucide-react";
 import { useOrders } from "@/hooks/useOrders";
@@ -6,6 +6,8 @@ import { KanbanColumn } from "@/components/acceptance/KanbanColumn";
 import { OrderCard } from "@/components/acceptance/OrderCard";
 import { DeclineDialog } from "@/components/acceptance/DeclineDialog";
 import { ConfirmDialog } from "@/components/acceptance/ConfirmDialog";
+import { OrderDataStatus } from "@/components/OrderDataStatus";
+import { WorkflowStageNav } from "@/components/WorkflowStageNav";
 
 import { RequireRole } from "@/components/RequireRole";
 
@@ -34,8 +36,22 @@ function AcceptanceDashboard() {
     declineOrder,
     dispatchOrder,
     markDelivered,
+    loading,
+    error,
+    hasLoaded,
+    refreshOrders,
+    connectionLost,
+    isOrderPending,
   } = useOrders();
   const [dialog, setDialog] = useState<DialogState>({ kind: "none" });
+  const laneRefs = useRef<Record<string, HTMLDivElement | null>>({});
+
+  const stages = [
+    { id: "pending", label: "Pending", count: pendingOrders.length },
+    { id: "accepted", label: "Accepted", count: acceptanceAcceptedOrders.length },
+    { id: "ready", label: "Ready", count: readyOrders.length },
+    { id: "out-for-delivery", label: "Out for Delivery", count: outForDeliveryOrders.length },
+  ];
 
   const activeOrder =
     dialog.kind !== "none" ? (orders.find((o) => o.id === dialog.orderId) ?? null) : null;
@@ -60,11 +76,11 @@ function AcceptanceDashboard() {
   };
 
   return (
-    <div className="flex h-[calc(100vh-7rem)] flex-col">
-      <div className="mb-4 flex items-end justify-between gap-4">
+    <div className="flex h-[calc(100dvh-7rem)] min-h-[24rem] min-w-0 flex-col">
+      <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
         <div>
           <h1 className="text-2xl font-semibold tracking-tight">Acceptance</h1>
-          <p className="text-sm text-muted-foreground">
+          <p className="hidden text-sm text-muted-foreground sm:block">
             Review incoming orders, dispatch deliveries, and complete pickups.
           </p>
         </div>
@@ -77,33 +93,89 @@ function AcceptanceDashboard() {
         </Link>
       </div>
 
-      <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 md:grid-cols-2 xl:grid-cols-4">
-        <KanbanColumn title="Pending" count={pendingOrders.length} pulseWhenActive>
-          {pendingOrders.map((o) => (
-            <OrderCard key={o.id} order={o} onAccept={acceptOrder} onDecline={handleDecline} />
-          ))}
-        </KanbanColumn>
-        <KanbanColumn title="Accepted" count={acceptanceAcceptedOrders.length}>
-          {acceptanceAcceptedOrders.map((o) => (
-            <OrderCard key={o.id} order={o} />
-          ))}
-        </KanbanColumn>
-        <KanbanColumn title="Ready" count={readyOrders.length}>
-          {readyOrders.map((o) => (
-            <OrderCard
-              key={o.id}
-              order={o}
-              onDispatch={handleDispatchOpen}
-              onPickup={handlePickupOpen}
-            />
-          ))}
-        </KanbanColumn>
-        <KanbanColumn title="Out for Delivery" count={outForDeliveryOrders.length}>
-          {outForDeliveryOrders.map((o) => (
-            <OrderCard key={o.id} order={o} />
-          ))}
-        </KanbanColumn>
-      </div>
+      <OrderDataStatus
+        loading={loading}
+        error={error}
+        hasLoaded={hasLoaded}
+        connectionLost={connectionLost}
+        onRetry={refreshOrders}
+      />
+
+      {hasLoaded && (
+        <>
+          <WorkflowStageNav
+            stages={stages}
+            onSelect={(id) =>
+              laneRefs.current[id]?.scrollIntoView({
+                behavior: "smooth",
+                block: "nearest",
+                inline: "start",
+              })
+            }
+          />
+          <div className="mt-3 min-h-0 min-w-0 flex-1 snap-x snap-proximity overflow-x-auto overscroll-x-contain xl:snap-none">
+            <div className="grid h-full grid-flow-col auto-cols-[min(300px,calc(100%-2.5rem))] gap-3 xl:grid-flow-row xl:auto-cols-auto xl:grid-cols-4">
+              <KanbanColumn
+                title="Pending"
+                count={pendingOrders.length}
+                pulseWhenActive
+                ref={(node) => {
+                  laneRefs.current.pending = node;
+                }}
+              >
+                {pendingOrders.map((o) => (
+                  <OrderCard
+                    key={o.id}
+                    order={o}
+                    pending={isOrderPending(o.id)}
+                    onAccept={acceptOrder}
+                    onDecline={handleDecline}
+                  />
+                ))}
+              </KanbanColumn>
+              <KanbanColumn
+                title="Accepted"
+                count={acceptanceAcceptedOrders.length}
+                ref={(node) => {
+                  laneRefs.current.accepted = node;
+                }}
+              >
+                {acceptanceAcceptedOrders.map((o) => (
+                  <OrderCard key={o.id} order={o} />
+                ))}
+              </KanbanColumn>
+              <KanbanColumn
+                title="Ready"
+                count={readyOrders.length}
+                ref={(node) => {
+                  laneRefs.current.ready = node;
+                }}
+              >
+                {readyOrders.map((o) => (
+                  <OrderCard
+                    key={o.id}
+                    order={o}
+                    pending={isOrderPending(o.id)}
+                    onDispatch={handleDispatchOpen}
+                    onPickup={handlePickupOpen}
+                  />
+                ))}
+              </KanbanColumn>
+              <KanbanColumn
+                title="Out for Delivery"
+                count={outForDeliveryOrders.length}
+                ref={(node) => {
+                  laneRefs.current["out-for-delivery"] = node;
+                }}
+              >
+                {outForDeliveryOrders.map((o) => (
+                  <OrderCard key={o.id} order={o} />
+                ))}
+              </KanbanColumn>
+            </div>
+          </div>
+        </>
+      )}
 
       <DeclineDialog
         orderNumber={dialog.kind === "decline" ? (activeOrder?.orderNumber ?? null) : null}

@@ -1,9 +1,17 @@
 import { useEffect, useState } from "react";
-import { createFileRoute, redirect, Outlet, useNavigate } from "@tanstack/react-router";
+import {
+  createFileRoute,
+  redirect,
+  Outlet,
+  useNavigate,
+  useRouterState,
+} from "@tanstack/react-router";
 import { AppSidebar } from "@/components/AppSidebar";
 import { SidebarInset, SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { getToken, getUser, type User } from "@/lib/auth";
 import { connectSocket } from "@/lib/socket";
+import { appConfig } from "@/lib/config";
+import { cn } from "@/lib/utils";
 
 export const Route = createFileRoute("/_authenticated")({
   beforeLoad: () => {
@@ -17,8 +25,27 @@ export const Route = createFileRoute("/_authenticated")({
 
 function AuthenticatedLayout() {
   const navigate = useNavigate();
+  const pathname = useRouterState({ select: (state) => state.location.pathname });
   const [user, setUser] = useState<User | null>(null);
   const [hydrated, setHydrated] = useState(false);
+  const [sidebarOpen, setSidebarOpen] = useState(true);
+  const pageLabel: Record<string, string> = {
+    "/acceptance": "Acceptance",
+    "/kitchen": "Kitchen",
+    "/driver": "Deliveries",
+    "/menu": "Menu",
+    "/admin": "Staff",
+    "/archive": "Order Archive",
+    "/settings": "Settings",
+  };
+
+  useEffect(() => {
+    const tablet = window.matchMedia("(min-width: 768px) and (max-width: 1023px)");
+    const update = () => setSidebarOpen(!tablet.matches);
+    update();
+    tablet.addEventListener("change", update);
+    return () => tablet.removeEventListener("change", update);
+  }, []);
 
   useEffect(() => {
     const u = getUser();
@@ -40,13 +67,29 @@ function AuthenticatedLayout() {
   }
 
   return (
-    <SidebarProvider>
+    <SidebarProvider open={sidebarOpen} onOpenChange={setSidebarOpen}>
       <AppSidebar user={user} />
-      <SidebarInset>
-        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border px-4">
+      <SidebarInset className="min-w-0 bg-muted/30">
+        <header className="flex h-14 shrink-0 items-center gap-2 border-b border-border bg-background px-4">
           <SidebarTrigger />
+          <div className="min-w-0 flex-1 truncate text-sm font-medium">
+            <span className="hidden text-muted-foreground sm:inline">
+              {appConfig.restaurantName} /{" "}
+            </span>
+            {pageLabel[pathname] ?? appConfig.restaurantName}
+          </div>
+          <span className="hidden text-xs capitalize text-muted-foreground sm:inline">
+            {user.role}
+          </span>
         </header>
-        <main className="mx-auto w-full max-w-6xl px-4 py-8 sm:px-6">
+        <main
+          className={cn(
+            "mx-auto w-full min-w-0 px-4 py-4 sm:px-6 sm:py-5",
+            ["/acceptance", "/kitchen", "/driver"].includes(pathname)
+              ? "max-w-[1920px]"
+              : "max-w-6xl",
+          )}
+        >
           <Outlet />
         </main>
       </SidebarInset>

@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AnimatePresence, motion } from "framer-motion";
-import { Phone, MapPin, StickyNote, ChevronDown, ChevronUp, PackageCheck } from "lucide-react";
+import { MapPin, Phone, StickyNote, PackageCheck, ChevronDown, ChevronUp } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -12,13 +12,14 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Card } from "@/components/ui/card";
+import { OrderDataStatus } from "@/components/OrderDataStatus";
+import { RequireRole } from "@/components/RequireRole";
 import { useOrders } from "@/hooks/useOrders";
 import { formatCurrency } from "@/lib/format";
 import { AgeBadge } from "@/components/AgeBadge";
 import { minutesInStatus, ageLevelFor, AGE_BORDER } from "@/lib/orderAge";
 import { cn } from "@/lib/utils";
 import type { Order } from "@/lib/types";
-import { RequireRole } from "@/components/RequireRole";
 
 export const Route = createFileRoute("/_authenticated/driver")({
   component: () => (
@@ -36,122 +37,148 @@ function DriverDashboard() {
     releaseOrder,
     takeOrder,
     markDelivered,
+    loading,
+    error,
+    hasLoaded,
+    refreshOrders,
+    connectionLost,
+    isOrderPending,
   } = useOrders();
   const [pendingId, setPendingId] = useState<string | null>(null);
   const [, force] = useState(0);
 
-  // re-render every 30s to keep ages fresh
   useEffect(() => {
-    const t = setInterval(() => force((n) => n + 1), 30_000);
-    return () => clearInterval(t);
+    const timer = setInterval(() => force((n) => n + 1), 30_000);
+    return () => clearInterval(timer);
   }, []);
 
   const pendingOrder = pendingId
-    ? (driverMineOrders.find((o) => o.id === pendingId) ?? null)
+    ? (driverMineOrders.find((order) => order.id === pendingId) ?? null)
     : null;
 
   const confirmDeliver = () => {
-    if (!pendingId) return;
-    markDelivered(pendingId, true);
+    if (pendingOrder?.status === "OUT_FOR_DELIVERY" && !isOrderPending(pendingOrder.id)) {
+      markDelivered(pendingOrder.id, true);
+    }
     setPendingId(null);
   };
 
   return (
-    <div className="mx-auto max-w-2xl space-y-8">
+    <div className="mx-auto min-w-0 max-w-7xl space-y-4">
       <div>
         <h1 className="text-2xl font-semibold tracking-tight">Deliveries</h1>
         <p className="text-sm text-muted-foreground">
-          Claim a ready order, then take it out and mark it delivered.
+          Claim, take out, and complete delivery orders.
         </p>
       </div>
 
-      {/* Mine */}
-      <section className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Your deliveries ({driverMineOrders.length})
-        </h2>
-        {driverMineOrders.length === 0 ? (
-          <p className="rounded-lg border border-dashed border-border bg-muted/30 px-4 py-6 text-center text-sm text-muted-foreground">
-            Nothing claimed yet. Grab one from below.
-          </p>
-        ) : (
-          <ul className="space-y-3">
-            <AnimatePresence mode="popLayout">
-              {driverMineOrders.map((order) => (
-                <DeliveryCard
-                  key={order.id}
-                  order={order}
-                  footer={
-                    order.status === "READY" ? (
-                      <div className="flex gap-2">
-                        <Button
-                          className="h-12 flex-1 text-base"
-                          onClick={() => takeOrder(order.id)}
-                        >
-                          Out for delivery
-                        </Button>
-                        <Button
-                          variant="outline"
-                          className="h-12"
-                          onClick={() => releaseOrder(order.id)}
-                        >
-                          Release
-                        </Button>
-                      </div>
-                    ) : (
-                      <Button
-                        size="lg"
-                        className="h-12 w-full text-base"
-                        onClick={() => setPendingId(order.id)}
-                      >
-                        Mark Delivered
-                      </Button>
-                    )
-                  }
-                />
-              ))}
-            </AnimatePresence>
-          </ul>
-        )}
-      </section>
+      <OrderDataStatus
+        loading={loading}
+        error={error}
+        hasLoaded={hasLoaded}
+        connectionLost={connectionLost}
+        onRetry={refreshOrders}
+      />
 
-      {/* Available */}
-      <section className="space-y-3">
-        <h2 className="text-xs font-semibold uppercase tracking-wide text-muted-foreground">
-          Available ({driverAvailableOrders.length})
-        </h2>
-        {driverAvailableOrders.length === 0 ? (
-          <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-muted/30 px-6 py-12 text-center">
-            <PackageCheck className="mb-3 h-10 w-10 text-muted-foreground" aria-hidden />
-            <div className="text-sm font-medium">Nothing waiting</div>
-            <p className="mt-1 text-sm text-muted-foreground">
-              New ready orders will appear here to claim.
-            </p>
-          </div>
-        ) : (
-          <ul className="space-y-3">
-            <AnimatePresence mode="popLayout">
-              {driverAvailableOrders.map((order) => (
-                <DeliveryCard
-                  key={order.id}
-                  order={order}
-                  footer={
-                    <Button
-                      size="lg"
-                      className="h-12 w-full text-base"
-                      onClick={() => claimOrder(order.id)}
-                    >
-                      Claim
-                    </Button>
-                  }
-                />
-              ))}
-            </AnimatePresence>
-          </ul>
-        )}
-      </section>
+      {hasLoaded && (
+        <div className="grid min-w-0 items-start gap-4 lg:grid-cols-2 lg:gap-5">
+          <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-muted/30">
+            <h2 className="border-b border-border bg-background px-4 py-3 text-base font-semibold">
+              Your deliveries{" "}
+              <span className="ml-1 text-muted-foreground">{driverMineOrders.length}</span>
+            </h2>
+            <div className="p-2.5">
+              {driverMineOrders.length === 0 ? (
+                <p className="rounded-lg border border-dashed border-border bg-background px-4 py-8 text-center text-sm text-muted-foreground">
+                  Nothing claimed yet. Choose a delivery from Available.
+                </p>
+              ) : (
+                <ul className="space-y-3">
+                  <AnimatePresence mode="popLayout">
+                    {driverMineOrders.map((order) => (
+                      <DeliveryCard
+                        key={order.id}
+                        order={order}
+                        assigned
+                        footer={
+                          order.status === "READY" ? (
+                            <div className="flex flex-wrap gap-2">
+                              <Button
+                                className="min-h-11 min-w-0 flex-1"
+                                disabled={isOrderPending(order.id)}
+                                onClick={() => takeOrder(order.id)}
+                              >
+                                Out for delivery
+                              </Button>
+                              <Button
+                                variant="outline"
+                                className="min-h-11 min-w-0 flex-1"
+                                disabled={isOrderPending(order.id)}
+                                onClick={() => releaseOrder(order.id)}
+                              >
+                                Release
+                              </Button>
+                            </div>
+                          ) : order.status === "OUT_FOR_DELIVERY" ? (
+                            <Button
+                              className="min-h-11 w-full"
+                              disabled={isOrderPending(order.id)}
+                              onClick={() => setPendingId(order.id)}
+                            >
+                              Mark delivered
+                            </Button>
+                          ) : null
+                        }
+                      />
+                    ))}
+                  </AnimatePresence>
+                </ul>
+              )}
+            </div>
+          </section>
 
-      <Dialog open={pendingId !== null} onOpenChange={(v) => !v && setPendingId(null)}>
+          <section className="min-w-0 overflow-hidden rounded-lg border border-border bg-muted/30">
+            <h2 className="border-b border-border bg-background px-4 py-3 text-base font-semibold">
+              Available{" "}
+              <span className="ml-1 text-muted-foreground">{driverAvailableOrders.length}</span>
+            </h2>
+            <div className="p-2.5">
+              {driverAvailableOrders.length === 0 ? (
+                <div className="flex flex-col items-center justify-center rounded-lg border border-dashed border-border bg-background px-6 py-10 text-center">
+                  <PackageCheck className="mb-3 h-8 w-8 text-muted-foreground" aria-hidden />
+                  <div className="text-sm font-medium">Nothing waiting</div>
+                  <p className="mt-1 text-sm text-muted-foreground">
+                    New ready orders will appear here to claim.
+                  </p>
+                </div>
+              ) : (
+                <ul className="space-y-3">
+                  <AnimatePresence mode="popLayout">
+                    {driverAvailableOrders.map((order) => (
+                      <DeliveryCard
+                        key={order.id}
+                        order={order}
+                        assigned={false}
+                        footer={
+                          <Button
+                            className="min-h-11 w-full"
+                            disabled={isOrderPending(order.id)}
+                            onClick={() => claimOrder(order.id)}
+                          >
+                            Claim delivery
+                          </Button>
+                        }
+                      />
+                    ))}
+                  </AnimatePresence>
+                </ul>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
+
+      <Dialog open={pendingId !== null} onOpenChange={(open) => !open && setPendingId(null)}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
@@ -165,7 +192,12 @@ function DriverDashboard() {
             <Button variant="outline" onClick={() => setPendingId(null)}>
               Cancel
             </Button>
-            <Button onClick={confirmDeliver}>Yes, delivered</Button>
+            <Button
+              onClick={confirmDeliver}
+              disabled={!pendingOrder || isOrderPending(pendingOrder.id)}
+            >
+              Yes, delivered
+            </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
@@ -173,18 +205,24 @@ function DriverDashboard() {
   );
 }
 
-const STATUS_LABEL: Record<string, string> = {
-  READY: "Ready",
-  OUT_FOR_DELIVERY: "Out for delivery",
-};
-
-function DeliveryCard({ order, footer }: { order: Order; footer: React.ReactNode }) {
-  const [expanded, setExpanded] = useState(false);
-  const itemCount = order.items.reduce((s, it) => s + it.quantity, 0);
-  const mapsUrl = `https://maps.google.com/?q=${encodeURIComponent(order.customerAddress ?? "")}`;
+function DeliveryCard({
+  order,
+  assigned,
+  footer,
+}: {
+  order: Order;
+  assigned: boolean;
+  footer: React.ReactNode;
+}) {
+  const [itemsOpen, setItemsOpen] = useState(false);
+  const itemCount = order.items.reduce((sum, item) => sum + item.quantity, 0);
+  const mapsUrl = order.customerAddress
+    ? `https://maps.google.com/?q=${encodeURIComponent(order.customerAddress)}`
+    : null;
   const telHref = `tel:${order.customerPhone.replace(/[^+\d]/g, "")}`;
   const minutes = minutesInStatus(order);
   const ageLevel = minutes !== null ? ageLevelFor(minutes) : null;
+  const ageLabel = order.status === "OUT_FOR_DELIVERY" ? "on road" : "ready";
 
   return (
     <motion.li
@@ -196,93 +234,115 @@ function DeliveryCard({ order, footer }: { order: Order; footer: React.ReactNode
     >
       <Card
         className={cn(
-          "overflow-hidden p-0 gap-0",
+          "min-w-0 gap-0 overflow-hidden p-0",
           ageLevel && "border-l-4",
           ageLevel && AGE_BORDER[ageLevel],
         )}
       >
-        <button
-          type="button"
-          onClick={() => setExpanded((v) => !v)}
-          className="w-full px-4 py-4 text-left transition-colors hover:bg-muted/40"
-          aria-expanded={expanded}
-        >
-          <div className="flex items-start justify-between gap-3">
-            <div className="min-w-0 flex-1">
-              <div className="flex items-center gap-2">
-                <span className="text-base font-bold tracking-tight">#{order.orderNumber}</span>
-                {minutes !== null && <AgeBadge minutes={minutes} />}
-                <span className="text-xs text-muted-foreground">
-                  {STATUS_LABEL[order.status] ?? order.status}
-                </span>
-              </div>
-              <div className="mt-1 truncate text-sm font-medium">{order.customerName}</div>
-              <div className="mt-0.5 truncate text-xs text-muted-foreground">
-                {itemCount} item{itemCount === 1 ? "" : "s"} · {formatCurrency(order.total)}
-              </div>
+        <div className="min-w-0 space-y-3 p-4">
+          <div className="flex flex-wrap items-start justify-between gap-x-3 gap-y-1">
+            <div className="flex flex-wrap items-center gap-2">
+              <h3 className="text-xl font-bold tracking-tight">#{order.orderNumber}</h3>
+              {minutes !== null && <AgeBadge minutes={minutes} />}
             </div>
-            {expanded ? (
-              <ChevronUp className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
-            ) : (
-              <ChevronDown className="mt-1 h-5 w-5 shrink-0 text-muted-foreground" />
-            )}
-          </div>
-        </button>
-
-        {expanded && (
-          <div className="space-y-3 border-t border-border bg-muted/20 px-4 py-4">
-            <div className="flex flex-col gap-2 sm:flex-row">
-              <a
-                href={telHref}
-                className="flex flex-1 items-center gap-2 rounded-md border border-border bg-background px-3 py-2.5 text-sm font-medium hover:bg-accent"
-              >
-                <Phone className="h-4 w-4 shrink-0" aria-hidden />
-                <span className="truncate">{order.customerPhone}</span>
-              </a>
-              {order.customerAddress && (
-                <a
-                  href={mapsUrl}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="flex flex-1 items-start gap-2 rounded-md border border-border bg-background px-3 py-2.5 text-sm font-medium hover:bg-accent"
-                >
-                  <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                  <span className="line-clamp-2 text-left">{order.customerAddress}</span>
-                </a>
+            <span
+              className={cn(
+                "rounded-md px-2 py-1 text-xs font-semibold",
+                assigned
+                  ? "bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-200"
+                  : "bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-200",
               )}
-            </div>
-
-            {order.customerNotes && (
-              <div className="flex items-start gap-2 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2 text-sm text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-100">
-                <StickyNote className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-                <span>{order.customerNotes}</span>
-              </div>
-            )}
-
-            <ul className="space-y-1 rounded-md bg-background/60 p-3 text-sm">
-              {order.items.map((it) => (
-                <li key={it.id} className="flex items-start justify-between gap-3">
-                  <span>
-                    <span>
-                      <span className="font-medium tabular-nums">{it.quantity}</span> ×{" "}
-                      {it.nameSnapshot}
-                    </span>
-                    {it.variantNameSnapshot && (
-                      <span className="block pl-5 text-xs font-medium text-muted-foreground">
-                        {it.variantNameSnapshot}
-                      </span>
-                    )}
-                  </span>
-                  <span className="tabular-nums text-muted-foreground">
-                    {formatCurrency(it.priceSnapshot * it.quantity)}
-                  </span>
-                </li>
-              ))}
-            </ul>
+            >
+              {assigned ? "Your trip" : "Unassigned"}
+            </span>
           </div>
-        )}
+          <div className="flex flex-wrap justify-between gap-x-3 text-sm text-muted-foreground">
+            <span>{minutes !== null ? `${minutes} min ${ageLabel}` : ageLabel}</span>
+            <span className="font-semibold tabular-nums">{formatCurrency(order.total)}</span>
+          </div>
 
-        <div className="border-t border-border bg-background p-3">{footer}</div>
+          <div className="space-y-1 text-sm">
+            <div className="break-words text-base font-semibold">{order.customerName}</div>
+            <div className="flex items-start gap-2 text-muted-foreground">
+              <MapPin className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <span className="min-w-0 break-words">
+                {order.customerAddress || "Address unavailable"}
+              </span>
+            </div>
+            <div className="flex items-start gap-2 text-muted-foreground">
+              <Phone className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <span className="min-w-0 break-all">{order.customerPhone}</span>
+            </div>
+          </div>
+
+          {order.customerNotes && (
+            <div className="flex items-start gap-2 rounded-md border border-amber-300/60 bg-amber-50 px-3 py-2.5 text-sm text-amber-900 dark:border-amber-700/40 dark:bg-amber-950/40 dark:text-amber-100">
+              <StickyNote className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
+              <div className="min-w-0 break-words">
+                <span className="block text-xs font-bold uppercase tracking-wide">Order note</span>
+                {order.customerNotes}
+              </div>
+            </div>
+          )}
+
+          <div className="flex flex-wrap gap-2">
+            <a
+              href={telHref}
+              className="inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold hover:bg-accent"
+            >
+              Call
+            </a>
+            {mapsUrl && (
+              <a
+                href={mapsUrl}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex min-h-11 items-center justify-center rounded-md border border-border bg-background px-4 text-sm font-semibold hover:bg-accent"
+              >
+                Open map
+              </a>
+            )}
+          </div>
+
+          <div className="border-t border-border pt-2">
+            <button
+              type="button"
+              onClick={() => setItemsOpen((open) => !open)}
+              aria-expanded={itemsOpen}
+              className="flex min-h-11 w-full items-center gap-2 text-left text-sm font-medium text-muted-foreground hover:text-foreground"
+            >
+              {itemsOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              {order.items.length} line{order.items.length === 1 ? "" : "s"} · {itemCount} item
+              {itemCount === 1 ? "" : "s"} — {itemsOpen ? "Hide items" : "View items"}
+            </button>
+            {itemsOpen && (
+              <ul className="space-y-2 rounded-md bg-muted/40 p-3 text-sm">
+                {order.items.map((item) => (
+                  <li
+                    key={item.id}
+                    className="min-w-0 border-b border-border/60 pb-2 last:border-0 last:pb-0"
+                  >
+                    <div className="flex items-start justify-between gap-3">
+                      <span className="min-w-0 break-words font-medium">
+                        <span className="tabular-nums">{item.quantity} ×</span> {item.nameSnapshot}
+                      </span>
+                      <span className="shrink-0 tabular-nums text-muted-foreground">
+                        {formatCurrency(item.priceSnapshot * item.quantity)}
+                      </span>
+                    </div>
+                    {item.variantNameSnapshot && (
+                      <div className="mt-0.5 break-words text-muted-foreground">
+                        {item.variantNameSnapshot}
+                      </div>
+                    )}
+                    {item.notes && <div className="mt-0.5 break-words">↳ {item.notes}</div>}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </div>
+        </div>
+        {footer && <div className="border-t border-border bg-background p-2.5">{footer}</div>}
       </Card>
     </motion.li>
   );

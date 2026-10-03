@@ -24,6 +24,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarSeparator,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Logo } from "@/components/Logo";
 import { logout, type Role, type User } from "@/lib/auth";
@@ -77,6 +78,7 @@ export function AppSidebar({ user }: { user: User }) {
   const pathname = useRouterState({ select: (s) => s.location.pathname });
   const { enabled: soundOn, toggle: toggleSound } = useSoundPref();
   const groups = navForRole(user.role);
+  const { setOpenMobile } = useSidebar();
 
   const handleLogout = () => {
     logout();
@@ -108,8 +110,9 @@ export function AppSidebar({ user }: { user: User }) {
                         asChild
                         isActive={pathname === item.to}
                         tooltip={item.label}
+                        className="min-h-11 md:min-h-9"
                       >
-                        <Link to={item.to}>
+                        <Link to={item.to} onClick={() => setOpenMobile(false)}>
                           <Icon />
                           <span>{item.label}</span>
                         </Link>
@@ -128,7 +131,7 @@ export function AppSidebar({ user }: { user: User }) {
           {user.role === "admin" && (
             <SidebarMenuItem>
               <SidebarMenuButton asChild isActive={pathname === "/settings"} tooltip="Settings">
-                <Link to="/settings">
+                <Link to="/settings" onClick={() => setOpenMobile(false)}>
                   <Settings />
                   <span>Settings</span>
                 </Link>

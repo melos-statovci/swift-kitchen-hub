@@ -4,6 +4,11 @@ import type { Order, OrderStatus } from "@/lib/types";
 import { apiFetch, ApiError, NetworkError } from "@/lib/api";
 import { connectSocket } from "@/lib/socket";
 import { playChime } from "@/lib/sound";
+import {
+  createOrderActionTracker,
+  mergeOrderSnapshot,
+  observeOrderConnection,
+} from "@/lib/orderSync";
 import { isOrderVisibleToRole } from "@/lib/orderVisibility";
 
 const sortByPlaced = (a: Order, b: Order) =>
@@ -43,6 +48,35 @@ export function useOrders() {
   const [orders, setOrders] = useState<Order[]>([]);
   const [loading, setLoading] = useState<boolean>(true);
   const [error, setError] = useState<string | null>(null);
+  const [hasLoaded, setHasLoaded] = useState(false);
+  const [connectionLost, setConnectionLost] = useState(false);
+  const [refreshVersion, setRefreshVersion] = useState(0);
+  const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
+  const [actionTracker] = useState(createOrderActionTracker);
+  const changeVersion = useRef(0);
+  const orderVersions = useRef(new Map<string, number>());
+  const noteChange = useCallback((id: string) => {
+    changeVersion.current += 1;
+    orderVersions.current.set(id, changeVersion.current);
+  }, []);
+  const refreshOrders = useCallback(() => setRefreshVersion((version) => version + 1), []);
+  const isOrderPending = useCallback((id: string) => pendingIds.has(id), [pendingIds]);
+  const beginAction = useCallback(
+    (id: string) => {
+      if (!actionTracker.begin(id)) return false;
+      setPendingIds(actionTracker.ids());
+      return true;
+    },
+    [actionTracker],
+  );
+  const endAction = useCallback(
+    (id: string) => {
+      const needsReconciliation = actionTracker.finish(id);
+      setPendingIds(actionTracker.ids());
+      if (needsReconciliation) refreshOrders();
+    },
+    [actionTracker, refreshOrders],
+  );
 
   // IDs of orders currently in this role's actionable view. Used to detect a
   // *new arrival* (so we chime once per order entering the board, not on the
@@ -53,18 +87,30 @@ export function useOrders() {
   useEffect(() => {
     let cancelled = false;
     const ac = new AbortController();
+    const requestVersion = changeVersion.current;
 
     setLoading(true);
-    setError(null);
 
     apiFetch<OrdersListResponse>("/api/orders", { auth: true, signal: ac.signal })
       .then((data) => {
         if (cancelled) return;
         const role = getCurrentRole();
         const visibleOrders = data.orders.filter((order) => isOrderVisibleToRole(order, role));
-        // Seed known IDs from the initial load so existing orders don't chime.
-        visibleOrders.forEach((o) => knownIds.current.add(o.id));
-        setOrders(visibleOrders);
+        // Preserve changes received after this snapshot request started, including
+        // removals and in-flight optimistic actions. A delayed GET must not undo them.
+        const protectedIds = actionTracker.ids();
+        orderVersions.current.forEach((version, id) => {
+          if (version > requestVersion) protectedIds.add(id);
+        });
+        visibleOrders.forEach((o) => {
+          if (!protectedIds.has(o.id)) knownIds.current.add(o.id);
+        });
+        setOrders((current) => mergeOrderSnapshot(visibleOrders, current, protectedIds));
+        orderVersions.current.forEach((version, id) => {
+          if (version <= requestVersion) orderVersions.current.delete(id);
+        });
+        setHasLoaded(true);
+        setError(null);
         setLoading(false);
       })
       .catch((err) => {
@@ -77,7 +123,7 @@ export function useOrders() {
       cancelled = true;
       ac.abort();
     };
-  }, []);
+  }, [refreshVersion, actionTracker]);
 
   // -----------------------------------------------------------
   // Realtime subscription
@@ -92,6 +138,8 @@ export function useOrders() {
     const role = getCurrentRole();
 
     const handleUpdated = (incoming: Order) => {
+      actionTracker.noteServerEvent(incoming.id);
+      noteChange(incoming.id);
       const isVisible = isOrderVisibleToRole(incoming, role);
       const wasKnown = knownIds.current.has(incoming.id);
 
@@ -135,6 +183,8 @@ export function useOrders() {
     };
 
     const handleCreated = (incoming: Order) => {
+      actionTracker.noteServerEvent(incoming.id);
+      noteChange(incoming.id);
       // A new order was just placed — only acceptance and admin care
       if (!isOrderVisibleToRole(incoming, role)) return;
 
@@ -153,31 +203,40 @@ export function useOrders() {
     };
 
     const handleRemoved = ({ id }: { id: string }) => {
+      actionTracker.noteServerEvent(id);
+      noteChange(id);
       knownIds.current.delete(id);
       setOrders((prev) => prev.filter((order) => order.id !== id));
     };
 
+    const stopConnectionObserver = observeOrderConnection(socket, setConnectionLost, refreshOrders);
     socket.on("order:updated", handleUpdated);
     socket.on("order:created", handleCreated);
     socket.on("order:removed", handleRemoved);
 
     return () => {
+      stopConnectionObserver();
       socket.off("order:updated", handleUpdated);
       socket.off("order:created", handleCreated);
       socket.off("order:removed", handleRemoved);
     };
-  }, []);
+  }, [refreshOrders, noteChange, actionTracker]);
 
   // ---------------------------------------------------------------------
   // Local state helpers (unchanged from previous session)
   // ---------------------------------------------------------------------
 
-  const replaceOrder = useCallback((next: Order) => {
-    setOrders((prev) => prev.map((o) => (o.id === next.id ? next : o)));
-  }, []);
+  const replaceOrder = useCallback(
+    (next: Order) => {
+      noteChange(next.id);
+      setOrders((prev) => prev.map((o) => (o.id === next.id ? next : o)));
+    },
+    [noteChange],
+  );
 
   const setStatusLocal = useCallback(
     (id: string, status: OrderStatus, extra: Partial<Order> = {}) => {
+      noteChange(id);
       const nowIso = new Date().toISOString();
       setOrders((prev) =>
         prev.map((o) => {
@@ -201,7 +260,7 @@ export function useOrders() {
         }),
       );
     },
-    [],
+    [noteChange],
   );
 
   const optimisticMutation = useCallback(
@@ -214,7 +273,7 @@ export function useOrders() {
       errorFallback: string,
     ): Promise<void> => {
       const original = orders.find((o) => o.id === id);
-      if (!original) return;
+      if (!original || !beginAction(id)) return;
 
       setStatusLocal(id, optimisticStatus, optimisticExtra);
 
@@ -224,13 +283,15 @@ export function useOrders() {
           auth: true,
           body,
         });
-        replaceOrder(data.order);
+        actionTracker.applyIfCurrent(id, () => replaceOrder(data.order));
       } catch (err) {
-        replaceOrder(original);
+        actionTracker.applyIfCurrent(id, () => replaceOrder(original));
         toast.error(describeError(err, errorFallback));
+      } finally {
+        endAction(id);
       }
     },
-    [orders, replaceOrder, setStatusLocal],
+    [orders, replaceOrder, setStatusLocal, beginAction, endAction, actionTracker],
   );
 
   // ---------------------------------------------------------------------
@@ -368,17 +429,20 @@ export function useOrders() {
   // syncs every other dashboard).
   const runDriverAction = useCallback(
     async (id: string, action: "claim" | "release" | "take", errorFallback: string) => {
+      if (!beginAction(id)) return;
       try {
         const data = await apiFetch<OrderResponse>(`/api/orders/${id}/${action}`, {
           method: "POST",
           auth: true,
         });
-        replaceOrder(data.order);
+        actionTracker.applyIfCurrent(id, () => replaceOrder(data.order));
       } catch (err) {
         toast.error(describeError(err, errorFallback));
+      } finally {
+        endAction(id);
       }
     },
-    [replaceOrder],
+    [replaceOrder, beginAction, endAction, actionTracker],
   );
 
   const claimOrder = useCallback(
@@ -469,6 +533,10 @@ export function useOrders() {
     orders,
     loading,
     error,
+    hasLoaded,
+    connectionLost,
+    refreshOrders,
+    isOrderPending,
     pendingOrders,
     acceptanceAcceptedOrders,
     readyOrders,

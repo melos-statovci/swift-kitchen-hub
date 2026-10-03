@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { RequireRole } from "@/components/RequireRole";
 import { FulfillmentBadge } from "@/components/FulfillmentBadge";
+import { formatCurrency } from "@/lib/format";
 import {
   useArchive,
   ARCHIVE_STATUS_DISPLAY,
@@ -89,6 +90,7 @@ function ArchivePage() {
           />
           {searchInput && (
             <button
+              type="button"
               onClick={clearSearch}
               className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
               aria-label="Clear search"
@@ -99,7 +101,7 @@ function ArchivePage() {
         </div>
 
         <Select value={status} onValueChange={(v) => setStatus(v as ArchiveStatusFilter)}>
-          <SelectTrigger className="w-full sm:w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by status">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -111,7 +113,7 @@ function ArchivePage() {
         </Select>
 
         <Select value={window} onValueChange={(v) => setWindow(v as ArchiveWindow)}>
-          <SelectTrigger className="w-full sm:w-[180px]">
+          <SelectTrigger className="w-full sm:w-[180px]" aria-label="Filter by time window">
             <SelectValue placeholder="Time window" />
           </SelectTrigger>
           <SelectContent>
@@ -143,13 +145,12 @@ function ArchivePage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-[80px]">#</TableHead>
+                  <TableHead className="w-[120px]">Order</TableHead>
                   <TableHead>Customer</TableHead>
                   <TableHead className="hidden md:table-cell">Phone</TableHead>
                   <TableHead className="hidden lg:table-cell">Placed</TableHead>
                   <TableHead className="text-right">Total</TableHead>
                   <TableHead className="w-[120px]">Status</TableHead>
-                  <TableHead className="w-[40px]"></TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -200,8 +201,22 @@ function ArchiveRow({
 
   return (
     <>
-      <TableRow className="cursor-pointer hover:bg-muted/50" onClick={onToggleExpand}>
-        <TableCell className="font-mono text-xs">{order.orderNumber}</TableCell>
+      <TableRow>
+        <TableCell className="font-mono text-xs">
+          <button
+            type="button"
+            className="inline-flex min-h-11 items-center gap-1.5 rounded-md px-1 text-left text-foreground hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            aria-expanded={expanded}
+            aria-label={`${expanded ? "Hide" : "View"} details for order ${order.orderNumber}`}
+            onClick={onToggleExpand}
+          >
+            <ChevronDown
+              className={`h-4 w-4 shrink-0 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
+              aria-hidden
+            />
+            {order.orderNumber}
+          </button>
+        </TableCell>
         <TableCell className="font-medium">{order.customerName}</TableCell>
         <TableCell className="hidden md:table-cell text-muted-foreground text-sm">
           {order.customerPhone}
@@ -209,7 +224,7 @@ function ArchiveRow({
         <TableCell className="hidden lg:table-cell text-muted-foreground text-sm">
           {formatDateTime(order.placedAt)}
         </TableCell>
-        <TableCell className="text-right font-medium">{formatPrice(order.total)}</TableCell>
+        <TableCell className="text-right font-medium">{formatCurrency(order.total)}</TableCell>
         <TableCell>
           {statusInfo && (
             <Badge
@@ -225,15 +240,10 @@ function ArchiveRow({
             </Badge>
           )}
         </TableCell>
-        <TableCell>
-          <ChevronDown
-            className={`h-4 w-4 text-muted-foreground transition-transform ${expanded ? "rotate-180" : ""}`}
-          />
-        </TableCell>
       </TableRow>
       {expanded && (
         <TableRow className="bg-muted/30">
-          <TableCell colSpan={7} className="py-4">
+          <TableCell colSpan={6} className="py-4">
             <ExpandedDetails order={order} />
           </TableCell>
         </TableRow>
@@ -251,6 +261,15 @@ function ExpandedDetails({ order }: { order: Order }) {
             {order.fulfillmentType === "PICKUP" ? "Pickup" : "Delivery"}
           </p>
           <FulfillmentBadge fulfillmentType={order.fulfillmentType} />
+          <p className="mt-2 md:hidden">
+            <span className="text-muted-foreground">Phone: </span>
+            <a
+              className="break-all underline-offset-2 hover:underline"
+              href={`tel:${order.customerPhone.replace(/[^\d+]/g, "")}`}
+            >
+              {order.customerPhone}
+            </a>
+          </p>
           {order.customerAddress && <p className="mt-1">{order.customerAddress}</p>}
           {order.customerNotes && (
             <p className="text-muted-foreground text-xs mt-1">Notes: {order.customerNotes}</p>
@@ -304,22 +323,24 @@ function ExpandedDetails({ order }: { order: Order }) {
                   <span className="text-muted-foreground text-xs ml-2">({item.notes})</span>
                 )}
               </div>
-              <span className="font-mono">{formatPrice(item.priceSnapshot * item.quantity)}</span>
+              <span className="font-mono">
+                {formatCurrency(item.priceSnapshot * item.quantity)}
+              </span>
             </div>
           ))}
         </div>
         <div className="border-t border-border mt-2 pt-2 space-y-0.5 text-sm">
           <div className="flex justify-between text-muted-foreground">
             <span>Subtotal</span>
-            <span>{formatPrice(order.subtotal)}</span>
+            <span>{formatCurrency(order.subtotal)}</span>
           </div>
           <div className="flex justify-between text-muted-foreground">
             <span>Delivery</span>
-            <span>{formatPrice(order.deliveryFee)}</span>
+            <span>{formatCurrency(order.deliveryFee)}</span>
           </div>
           <div className="flex justify-between font-semibold">
             <span>Total</span>
-            <span>{formatPrice(order.total)}</span>
+            <span>{formatCurrency(order.total)}</span>
           </div>
         </div>
       </div>
@@ -349,13 +370,9 @@ function EmptyState({
   );
 }
 
-function formatPrice(cents: number): string {
-  return `${(cents / 100).toFixed(2)}€`;
-}
-
 function formatDateTime(iso: string): string {
   const d = new Date(iso);
-  const date = d.toLocaleDateString(undefined, { day: "numeric", month: "short" });
+  const date = d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
   const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
   return `${date}, ${time}`;
 }
