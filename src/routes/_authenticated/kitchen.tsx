@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useLayoutEffect, useRef, useState } from "react";
 import { createFileRoute } from "@tanstack/react-router";
 import { AnimatePresence } from "framer-motion";
 import {
@@ -11,8 +11,12 @@ import {
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { useOrders } from "@/hooks/useOrders";
-import type { Order } from "@/lib/types";
+import { useKitchenInteraction } from "@/hooks/useKitchenInteraction";
+import { createKitchenActionGate, type KitchenActionSource } from "@/lib/kitchenInteraction";
+import { KITCHEN_INTERACTION_OPTIONS } from "@/lib/kitchenInteractionPreference";
+import type { Order, OrderStatus } from "@/lib/types";
 import { KitchenCard } from "@/components/kitchen/KitchenCard";
+import { KitchenInteractionControl } from "@/components/kitchen/KitchenInteractionControl";
 import { OrderDataStatus } from "@/components/OrderDataStatus";
 import { WorkflowStageNav } from "@/components/WorkflowStageNav";
 import { cn } from "@/lib/utils";
@@ -51,6 +55,32 @@ function KitchenDashboard() {
     connectionLost,
     isOrderPending,
   } = useOrders();
+  const { mode } = useKitchenInteraction();
+  const currentState = useRef({
+    orders,
+    mode,
+    isOrderPending,
+    startOrder,
+    markKitchenOrderReady,
+    moveKitchenOrderBackward,
+  });
+  useLayoutEffect(() => {
+    currentState.current = {
+      orders,
+      mode,
+      isOrderPending,
+      startOrder,
+      markKitchenOrderReady,
+      moveKitchenOrderBackward,
+    };
+  });
+  const [actionGate] = useState(() =>
+    createKitchenActionGate((id) => {
+      const current = currentState.current;
+      const order = current.orders.find((candidate) => candidate.id === id);
+      return order ? { order, mode: current.mode, pending: current.isOrderPending(id) } : null;
+    }),
+  );
   const [pendingDoneId, setPendingDoneId] = useState<string | null>(null);
   const laneRefs = useRef<Record<ColumnKey, HTMLDivElement | null>>({
     todo: null,
@@ -64,27 +94,33 @@ function KitchenDashboard() {
     done: kitchenDoneOrders,
   };
 
-  const handleStart = (id: string) => {
-    const order = orders.find((o) => o.id === id);
-    if (order?.status === "ACCEPTED" && !isOrderPending(id)) startOrder(id);
+  const runAction = (id: string, source: KitchenActionSource, expectedStatus: OrderStatus) => {
+    void actionGate.run({ order: { id }, source, expectedStatus }, (action, orderId) => {
+      const current = currentState.current;
+      return action === "start"
+        ? current.startOrder(orderId)
+        : action === "ready"
+          ? current.markKitchenOrderReady(orderId)
+          : current.moveKitchenOrderBackward(orderId);
+    });
   };
+  const handleStart = (id: string) => runAction(id, "forward", "ACCEPTED");
+  const handleSurfaceAdvance = (id: string, expectedStatus: OrderStatus) =>
+    runAction(id, "surface", expectedStatus);
 
   const handleMarkReady = (id: string) => {
-    const order = orders.find((o) => o.id === id);
-    if (order?.status === "IN_PROGRESS" && !isOrderPending(id)) setPendingDoneId(id);
+    const current = currentState.current;
+    const order = current.orders.find((o) => o.id === id);
+    if (order?.status === "IN_PROGRESS" && !current.isOrderPending(id)) setPendingDoneId(id);
   };
 
-  const handleMoveBack = (id: string) => {
-    const order = orders.find((o) => o.id === id);
-    if ((order?.status === "IN_PROGRESS" || order?.status === "READY") && !isOrderPending(id)) {
-      moveKitchenOrderBackward(id);
-    }
-  };
+  const handleMoveBack = (id: string, expectedStatus: OrderStatus) =>
+    runAction(id, "back", expectedStatus);
 
   const confirmDone = () => {
     const order = orders.find((o) => o.id === pendingDoneId);
     if (order?.status === "IN_PROGRESS" && !isOrderPending(order.id)) {
-      markKitchenOrderReady(order.id);
+      runAction(order.id, "forward", "IN_PROGRESS");
     }
     setPendingDoneId(null);
   };
@@ -94,9 +130,15 @@ function KitchenDashboard() {
   return (
     <div className="flex min-w-0 flex-col lg:h-[calc(100dvh-7rem)] lg:min-h-[24rem]">
       <div className="mb-4">
-        <h1 className="text-2xl font-semibold tracking-tight">Kitchen</h1>
+        <div className="flex items-center justify-between gap-3">
+          <h1 className="text-2xl font-semibold tracking-tight">Kitchen</h1>
+          <KitchenInteractionControl />
+        </div>
         <p className="text-sm text-muted-foreground">
           Preparation notes, quantities, and sizes. Oldest placed first.
+        </p>
+        <p className="mt-1 text-xs text-muted-foreground">
+          {KITCHEN_INTERACTION_OPTIONS.find((option) => option.value === mode)?.label} · This device
         </p>
       </div>
 
@@ -161,6 +203,8 @@ function KitchenDashboard() {
                               key={order.id}
                               order={order}
                               pending={isOrderPending(order.id)}
+                              interactionMode={mode}
+                              onSurfaceAdvance={handleSurfaceAdvance}
                               onStart={handleStart}
                               onMarkReady={handleMarkReady}
                               onMoveBack={handleMoveBack}

@@ -13,6 +13,7 @@ import { ApiError, NetworkError } from "@/lib/api";
 import { isValidHoursPair } from "@/lib/schedule";
 import { appConfig } from "@/lib/config";
 import { getSettingsPresentation } from "@/lib/settingsPresentation";
+import { KitchenInteractionSettings } from "@/components/kitchen/KitchenInteractionSettings";
 
 export const Route = createFileRoute("/_authenticated/settings")({
   component: () => (
@@ -43,6 +44,21 @@ type FormState = {
 };
 
 function SettingsPage() {
+  return (
+    <div className="space-y-6">
+      <div>
+        <h1 className="text-2xl font-semibold tracking-tight">Restaurant settings</h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Saved service status, hours and delivery fee. All times use {appConfig.businessTimeZone}.
+        </p>
+      </div>
+      <KitchenInteractionSettings />
+      <RestaurantSettingsForm />
+    </div>
+  );
+}
+
+function RestaurantSettingsForm() {
   const { settings, openStatus, loading, error: loadError, saving, save, retry } = useSettings();
   const [form, setForm] = useState<FormState | null>(null);
   const [formError, setFormError] = useState<string | null>(null);
@@ -197,13 +213,6 @@ function SettingsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-2xl font-semibold tracking-tight">Restaurant settings</h1>
-        <p className="mt-1 text-sm text-muted-foreground">
-          Saved service status, hours and delivery fee. All times use {appConfig.businessTimeZone}.
-        </p>
-      </div>
-
       <fieldset disabled={saving} className="min-w-0 space-y-6">
         <legend className="sr-only">Restaurant settings draft</legend>
         <section className="rounded-lg border border-border bg-background p-4 sm:p-6">
