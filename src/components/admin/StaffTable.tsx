@@ -32,9 +32,7 @@ const roleLabel: Record<UserRole, string> = {
 function roleBadge(role: UserRole) {
   switch (role) {
     case "admin":
-      return (
-        <Badge variant="default">{roleLabel[role]}</Badge>
-      );
+      return <Badge variant="default">{roleLabel[role]}</Badge>;
     case "acceptance":
       return <Badge variant="secondary">{roleLabel[role]}</Badge>;
     case "kitchen":
@@ -122,9 +120,7 @@ export function StaffTable({ users, onEdit, onResetPassword, onDelete }: StaffTa
               <TableCell className="font-medium">{u.name}</TableCell>
               <TableCell className="text-muted-foreground">{u.email}</TableCell>
               <TableCell>{roleBadge(u.role)}</TableCell>
-              <TableCell className="text-muted-foreground">
-                {formatRelative(u.createdAt)}
-              </TableCell>
+              <TableCell className="text-muted-foreground">{formatRelative(u.createdAt)}</TableCell>
               <TableCell className="text-right">
                 <DropdownMenu>
                   <DropdownMenuTrigger asChild>

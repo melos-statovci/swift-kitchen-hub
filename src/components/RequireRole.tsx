@@ -5,13 +5,7 @@ import { canAccess, getUser, homePathForRole, type Role } from "@/lib/auth";
 
 type AllowedRole = "acceptance" | "kitchen" | "driver" | "admin";
 
-export function RequireRole({
-  route,
-  children,
-}: {
-  route: AllowedRole;
-  children: ReactNode;
-}) {
+export function RequireRole({ route, children }: { route: AllowedRole; children: ReactNode }) {
   const navigate = useNavigate();
   const [state, setState] = useState<
     { kind: "loading" } | { kind: "ok" } | { kind: "denied"; role: Role }

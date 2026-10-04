@@ -1,6 +1,6 @@
 import { io, Socket } from "socket.io-client";
+import { appConfig } from "./config";
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
 const TOKEN_KEY = "sk_token";
 
 let socket: Socket | null = null;
@@ -18,7 +18,7 @@ export function connectSocket(): Socket | null {
   const token = localStorage.getItem(TOKEN_KEY);
   if (!token) return null;
 
-  socket = io(API_URL, {
+  socket = io(appConfig.apiUrl, {
     auth: { token },
     // Try WebSocket first, fall back to long-polling if it's blocked.
     transports: ["websocket", "polling"],

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useState } from "react";
 import type { Order, OrderStatus } from "@/lib/types";
 import { apiFetch, ApiError, NetworkError } from "@/lib/api";
 
@@ -21,8 +21,8 @@ type ArchiveResponse = {
 
 const PAGE_SIZE = 50;
 
-function windowToFromDate(window: ArchiveWindow): Date | null {
-  const now = Date.now();
+// "Last N days" is a rolling N×24-hour duration, not a business-calendar-day filter.
+export function windowToFromDate(window: ArchiveWindow, now: number = Date.now()): Date | null {
   switch (window) {
     case "7d":
       return new Date(now - 7 * 24 * 60 * 60 * 1000);
@@ -31,8 +31,8 @@ function windowToFromDate(window: ArchiveWindow): Date | null {
     case "90d":
       return new Date(now - 90 * 24 * 60 * 60 * 1000);
     case "all":
-      // The backend defaults to 7 days, so for "all" we send a very old date
-      return new Date("2020-01-01");
+      // The backend defaults to 7 days, so send the earliest supported order instant.
+      return new Date(0);
   }
 }
 
@@ -50,6 +50,7 @@ function buildSearchParams(filters: ArchiveFilters, offset: number): string {
 }
 
 export function useArchive(filters: ArchiveFilters) {
+  const { status, window: archiveWindow, query } = filters;
   const [orders, setOrders] = useState<Order[]>([]);
   const [total, setTotal] = useState(0);
   const [hasMore, setHasMore] = useState(false);
@@ -65,10 +66,13 @@ export function useArchive(filters: ArchiveFilters) {
     setLoading(true);
     setError(null);
 
-    apiFetch<ArchiveResponse>(`/api/orders/archive?${buildSearchParams(filters, 0)}`, {
-      auth: true,
-      signal: ac.signal,
-    })
+    apiFetch<ArchiveResponse>(
+      `/api/orders/archive?${buildSearchParams({ status, window: archiveWindow, query }, 0)}`,
+      {
+        auth: true,
+        signal: ac.signal,
+      },
+    )
       .then((data) => {
         if (cancelled) return;
         setOrders(data.orders);
@@ -88,7 +92,7 @@ export function useArchive(filters: ArchiveFilters) {
       cancelled = true;
       ac.abort();
     };
-  }, [filters.status, filters.window, filters.query]);
+  }, [status, archiveWindow, query]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) return;

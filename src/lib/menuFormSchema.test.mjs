@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { createMenuFormSchema } from "./menuFormSchema.ts";
+import { createMenuFormSchema, validateRequiredVariants } from "./menuFormSchema.ts";
 
 const fields = {
   name: "Margherita",
@@ -45,4 +45,19 @@ test("returning to required variants ignores an invalid hidden flat-price draft"
   for (const price of [1001, -1, "invalid", null, undefined]) {
     assert.equal(schema.safeParse({ ...fields, variantMode: "REQUIRED", price }).success, true);
   }
+});
+
+test("a required product accepts a priced variant even when every variant is unavailable", () => {
+  assert.equal(
+    validateRequiredVariants([{ name: "Large", priceEuros: 12, available: false }]),
+    null,
+  );
+});
+
+test("a required product cannot save with no variants or an unpriced variant", () => {
+  assert.equal(validateRequiredVariants([]), "Add at least one variant.");
+  assert.equal(
+    validateRequiredVariants([{ name: "Large", priceEuros: Number.NaN, available: false }]),
+    "Every variant needs a name and a valid price.",
+  );
 });

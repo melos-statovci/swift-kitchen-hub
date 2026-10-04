@@ -136,7 +136,12 @@ export function CategoryManager({
                       className="h-8 max-w-xs"
                       aria-label={`Rename ${c.name}`}
                     />
-                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => saveEdit(c)}>
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-8 w-8"
+                      onClick={() => saveEdit(c)}
+                    >
                       <Check className="h-4 w-4" />
                     </Button>
                     <Button
@@ -175,7 +180,9 @@ export function CategoryManager({
                     className="h-8 w-8 text-destructive hover:text-destructive"
                     onClick={() => handleDelete(c)}
                     disabled={count > 0}
-                    title={count > 0 ? "Move its items to another category first" : "Remove category"}
+                    title={
+                      count > 0 ? "Move its items to another category first" : "Remove category"
+                    }
                     aria-label={`Remove ${c.name}`}
                   >
                     <Trash2 className="h-4 w-4" />

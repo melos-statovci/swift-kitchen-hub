@@ -1,4 +1,5 @@
 import { appConfig } from "./config";
+import { formatBusinessDateTime, formatBusinessTime } from "./businessTime";
 
 const currencyFormatter = new Intl.NumberFormat(appConfig.locale, {
   style: "currency",
@@ -10,8 +11,11 @@ export function formatCurrency(cents: number): string {
 }
 
 export function formatTime(iso: string): string {
-  const d = new Date(iso);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit", hour12: false });
+  return formatBusinessTime(iso, appConfig.locale, appConfig.businessTimeZone);
+}
+
+export function formatDateTime(iso: string): string {
+  return formatBusinessDateTime(iso, appConfig.locale, appConfig.businessTimeZone);
 }
 
 export function formatRelative(iso: string, nowMs: number = Date.now()): string {

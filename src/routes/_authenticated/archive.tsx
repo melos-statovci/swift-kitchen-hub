@@ -21,7 +21,7 @@ import {
 } from "@/components/ui/table";
 import { RequireRole } from "@/components/RequireRole";
 import { FulfillmentBadge } from "@/components/FulfillmentBadge";
-import { formatCurrency } from "@/lib/format";
+import { formatCurrency, formatDateTime } from "@/lib/format";
 import {
   useArchive,
   ARCHIVE_STATUS_DISPLAY,
@@ -244,7 +244,7 @@ function ArchiveRow({
       {expanded && (
         <TableRow className="bg-muted/30">
           <TableCell colSpan={6} className="py-4">
-            <ExpandedDetails order={order} />
+            <ArchiveOrderDetails order={order} />
           </TableCell>
         </TableRow>
       )}
@@ -252,7 +252,7 @@ function ArchiveRow({
   );
 }
 
-function ExpandedDetails({ order }: { order: Order }) {
+export function ArchiveOrderDetails({ order }: { order: Order }) {
   return (
     <div className="space-y-3 px-2">
       <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">
@@ -368,11 +368,4 @@ function EmptyState({
       )}
     </div>
   );
-}
-
-function formatDateTime(iso: string): string {
-  const d = new Date(iso);
-  const date = d.toLocaleDateString(undefined, { day: "numeric", month: "short", year: "numeric" });
-  const time = d.toLocaleTimeString(undefined, { hour: "2-digit", minute: "2-digit" });
-  return `${date}, ${time}`;
 }

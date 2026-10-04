@@ -1,7 +1,7 @@
 // Tiny API client that handles base URL, JSON parsing, and Bearer auth.
 // Swap point: every component that talks to the backend goes through this.
 
-const API_URL = import.meta.env.VITE_API_URL ?? "http://localhost:3001";
+import { appConfig } from "./config";
 
 const TOKEN_KEY = "sk_token";
 
@@ -43,7 +43,7 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
 
   let res: Response;
   try {
-    res = await fetch(`${API_URL}${path}`, {
+    res = await fetch(`${appConfig.apiUrl}${path}`, {
       method,
       headers,
       body: body === undefined ? undefined : JSON.stringify(body),
@@ -65,7 +65,10 @@ export async function apiFetch<T>(path: string, options: ApiOptions = {}): Promi
 
   if (!res.ok) {
     const message =
-      (parsed && typeof parsed === "object" && "error" in parsed && typeof (parsed as { error: unknown }).error === "string"
+      (parsed &&
+      typeof parsed === "object" &&
+      "error" in parsed &&
+      typeof (parsed as { error: unknown }).error === "string"
         ? (parsed as { error: string }).error
         : null) ?? `Request failed with status ${res.status}`;
     throw new ApiError(res.status, parsed, message);

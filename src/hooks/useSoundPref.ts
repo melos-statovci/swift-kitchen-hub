@@ -1,11 +1,5 @@
 import { useEffect, useState } from "react";
-import {
-  SOUND_EVENT,
-  isSoundEnabled,
-  setSoundEnabled,
-  primeAudio,
-  playChime,
-} from "@/lib/sound";
+import { SOUND_EVENT, isSoundEnabled, setSoundEnabled, primeAudio, playChime } from "@/lib/sound";
 
 /**
  * Reactive view of the order-sound preference for the navbar toggle.

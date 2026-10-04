@@ -94,9 +94,7 @@ export function useUsers() {
 
   const sortedUsers = useMemo(
     () =>
-      [...users].sort(
-        (a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime(),
-      ),
+      [...users].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()),
     [users],
   );
 
@@ -119,26 +117,23 @@ export function useUsers() {
     }
   }, []);
 
-  const updateUser = useCallback(
-    async (id: string, patch: UpdateUserPatch): Promise<StaffUser> => {
-      try {
-        const data = await apiFetch<UserResponse>(`/api/users/${id}`, {
-          method: "PATCH",
-          auth: true,
-          body: {
-            ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
-            ...(patch.email !== undefined ? { email: patch.email.toLowerCase().trim() } : {}),
-            ...(patch.role !== undefined ? { role: patch.role } : {}),
-          },
-        });
-        setUsers((prev) => prev.map((u) => (u.id === id ? data.user : u)));
-        return data.user;
-      } catch (err) {
-        throw translateApiError(err);
-      }
-    },
-    [],
-  );
+  const updateUser = useCallback(async (id: string, patch: UpdateUserPatch): Promise<StaffUser> => {
+    try {
+      const data = await apiFetch<UserResponse>(`/api/users/${id}`, {
+        method: "PATCH",
+        auth: true,
+        body: {
+          ...(patch.name !== undefined ? { name: patch.name.trim() } : {}),
+          ...(patch.email !== undefined ? { email: patch.email.toLowerCase().trim() } : {}),
+          ...(patch.role !== undefined ? { role: patch.role } : {}),
+        },
+      });
+      setUsers((prev) => prev.map((u) => (u.id === id ? data.user : u)));
+      return data.user;
+    } catch (err) {
+      throw translateApiError(err);
+    }
+  }, []);
 
   const deleteUser = useCallback(async (id: string): Promise<void> => {
     try {
@@ -152,21 +147,18 @@ export function useUsers() {
     }
   }, []);
 
-  const resetPassword = useCallback(
-    async (id: string, newPassword: string): Promise<void> => {
-      try {
-        await apiFetch<UserResponse>(`/api/users/${id}/reset-password`, {
-          method: "POST",
-          auth: true,
-          body: { password: newPassword },
-        });
-        // No local state to update - we don't store passwords client-side
-      } catch (err) {
-        throw translateApiError(err);
-      }
-    },
-    [],
-  );
+  const resetPassword = useCallback(async (id: string, newPassword: string): Promise<void> => {
+    try {
+      await apiFetch<UserResponse>(`/api/users/${id}/reset-password`, {
+        method: "POST",
+        auth: true,
+        body: { password: newPassword },
+      });
+      // No local state to update - we don't store passwords client-side
+    } catch (err) {
+      throw translateApiError(err);
+    }
+  }, []);
 
   return {
     users: sortedUsers,

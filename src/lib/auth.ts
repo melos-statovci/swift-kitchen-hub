@@ -75,7 +75,10 @@ export function homePathForRole(role: Role): string {
   }
 }
 
-export function canAccess(role: Role, route: "acceptance" | "kitchen" | "driver" | "admin"): boolean {
+export function canAccess(
+  role: Role,
+  route: "acceptance" | "kitchen" | "driver" | "admin",
+): boolean {
   if (role === "admin") return true;
   return role === route;
 }

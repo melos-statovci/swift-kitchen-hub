@@ -87,3 +87,42 @@ test("Kitchen has its own native device-controls entry without requiring restaur
     /<button\b[^>]*aria-label="Kitchen controls for this device"[^>]*>Controls<\/button>/,
   );
 });
+
+test("Kitchen renders mixed historical flat and required-variant snapshots", () => {
+  const historical = {
+    ...order,
+    items: [
+      {
+        id: "flat-line",
+        quantity: 2,
+        nameSnapshot: "Original Flat Dish",
+        variantNameSnapshot: null,
+        notes: "Flat note",
+      },
+      {
+        id: "variant-line",
+        quantity: 1,
+        nameSnapshot: "Original Variant Dish",
+        variantNameSnapshot: "Large",
+        notes: "Variant note",
+      },
+    ],
+  };
+  const html = renderToStaticMarkup(
+    React.createElement(KitchenCard, {
+      order: historical,
+      pending: false,
+      interactionMode: "both",
+      onSurfaceAdvance() {},
+      onStart() {},
+      onMarkReady() {},
+      onMoveBack() {},
+    }),
+  );
+
+  assert.match(html, /2 ×<\/span><span[^>]*>Original Flat Dish<\/span>/);
+  assert.match(html, /1 ×<\/span><span[^>]*>Original Variant Dish<\/span>/);
+  assert.match(html, />Large<\/div>/);
+  assert.match(html, /Flat note/);
+  assert.match(html, /Variant note/);
+});

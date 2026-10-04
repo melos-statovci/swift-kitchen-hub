@@ -35,7 +35,7 @@ import {
 import type { Category, MenuItem } from "@/lib/types";
 import type { CreateMenuItemInput, SaveVariantInput } from "@/hooks/useMenuItems";
 import { requiresExplicitFlatPrice } from "@/lib/menuPricing";
-import { createMenuFormSchema } from "@/lib/menuFormSchema";
+import { createMenuFormSchema, validateRequiredVariants } from "@/lib/menuFormSchema";
 import { appConfig } from "@/lib/config";
 
 // Managers enter currency units; the existing payload converts them to cents.
@@ -134,22 +134,10 @@ export function MenuFormDialog({
   const submit = async (values: Values) => {
     setSaveError(null);
     if (values.variantMode === "REQUIRED") {
-      if (variants.length === 0 || !variants.some((variant) => variant.available)) {
-        setSaveError("Add at least one available variant.");
-        toast.error("Add at least one available variant.");
-        return;
-      }
-      if (
-        variants.some(
-          (variant) =>
-            !variant.name.trim() ||
-            !Number.isFinite(variant.priceEuros) ||
-            variant.priceEuros < 0 ||
-            variant.priceEuros > 1000,
-        )
-      ) {
-        setSaveError("Every variant needs a name and a valid price.");
-        toast.error("Every variant needs a name and a valid price.");
+      const variantError = validateRequiredVariants(variants);
+      if (variantError) {
+        setSaveError(variantError);
+        toast.error(variantError);
         return;
       }
     }
@@ -402,7 +390,7 @@ export function MenuFormDialog({
 
                     {variants.length === 0 ? (
                       <p className="rounded-md bg-muted/40 px-3 py-4 text-center text-sm text-muted-foreground">
-                        Add at least one available variant before saving.
+                        Add at least one variant before saving.
                       </p>
                     ) : (
                       <div className="space-y-2">
