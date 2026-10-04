@@ -47,7 +47,7 @@ type VariantDraft = {
   id?: string;
   key: string;
   name: string;
-  priceEuros: number;
+  priceEuros: number | string;
   available: boolean;
 };
 
@@ -162,7 +162,7 @@ export function MenuFormDialog({
         ? variants.map((variant, sortOrder) => ({
             ...(variant.id ? { id: variant.id } : {}),
             name: variant.name.trim(),
-            price: Math.round(variant.priceEuros * 100),
+            price: Math.round(Number(variant.priceEuros) * 100),
             sortOrder,
             available: variant.available,
           }))
@@ -434,7 +434,7 @@ export function MenuFormDialog({
                                 value={variant.priceEuros}
                                 onChange={(event) =>
                                   updateVariantDraft(variant.key, {
-                                    priceEuros: Number(event.target.value),
+                                    priceEuros: event.target.value,
                                   })
                                 }
                                 aria-label={`Variant ${index + 1} price in ${appConfig.currency}`}

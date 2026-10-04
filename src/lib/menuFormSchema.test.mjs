@@ -61,3 +61,15 @@ test("a required product cannot save with no variants or an unpriced variant", (
     "Every variant needs a name and a valid price.",
   );
 });
+
+test("variant price drafts preserve cleared input as invalid while accepting explicit zero", () => {
+  for (const priceEuros of ["", "   ", "invalid"]) {
+    assert.equal(
+      validateRequiredVariants([{ name: "Large", priceEuros }]),
+      "Every variant needs a name and a valid price.",
+    );
+  }
+  for (const priceEuros of ["0", "4.50"]) {
+    assert.equal(validateRequiredVariants([{ name: "Large", priceEuros }]), null);
+  }
+});

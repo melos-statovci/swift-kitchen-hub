@@ -25,16 +25,17 @@ export function createMenuFormSchema(currency: string) {
 }
 
 export function validateRequiredVariants(
-  variants: ReadonlyArray<{ name: string; priceEuros: number }>,
+  variants: ReadonlyArray<{ name: string; priceEuros: number | string }>,
 ): string | null {
   if (variants.length === 0) return "Add at least one variant.";
   if (
     variants.some(
       (variant) =>
         !variant.name.trim() ||
-        !Number.isFinite(variant.priceEuros) ||
-        variant.priceEuros < 0 ||
-        variant.priceEuros > 1000,
+        (typeof variant.priceEuros === "string" && !variant.priceEuros.trim()) ||
+        !Number.isFinite(Number(variant.priceEuros)) ||
+        Number(variant.priceEuros) < 0 ||
+        Number(variant.priceEuros) > 1000,
     )
   ) {
     return "Every variant needs a name and a valid price.";
