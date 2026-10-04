@@ -11,7 +11,7 @@ Both APIs run the identical compiled `dist/server.js` from this backend worktree
 | DUA-style synthetic rehearsal | swiftkitchen_shared_dua_test / 55441 | 31041 | 8083 | sq-XK / Europe/Belgrade | DUA required pizzas plus real flat items |
 | Generic flat synthetic rehearsal | swiftkitchen_shared_flat_test / 55442 | 31042 | 8084 | en-GB / America/New_York | Synthetic sandwiches/drinks, NONE, no fake variants |
 
-Both use EUR and independent JWT secrets/CORS allowlists/settings/staff/orders. These databases are disposable tmpfs containers created by `docker-compose.shared.yml`; the existing DUA development container on 55432 was not changed.
+Both use EUR and distinct PostgreSQL users/passwords, JWT secrets, CORS allowlists, settings, staff and orders. These databases are disposable tmpfs containers created by `docker-compose.shared.yml`; the existing DUA development container on 55432 was not changed.
 
 ## Repeat locally
 
@@ -28,7 +28,7 @@ Open `http://127.0.0.1:8083/` or `http://127.0.0.1:8084/`. Synthetic accounts ar
 
 ## Observed behavior
 
-Real PostgreSQL tests prove legacy history/flat-price/default-delivery preservation through migration six; SQL price/money/quantity constraints; flat and required authoritative pricing; required selection enforcement; mixed line totals/snapshots; delivery fee/contact/driver progression; addressless zero-fee pickup and driver exclusion; token tracking/cancellation; immutable history after catalog changes; standalone edit version invalidation; concurrent aggregate winner/409 loser; order versus variant repricing; referenced variant archiving and last-variant refusal; sold-out required saves. HTTP and socket tokens from the other runtime are rejected. Each runtime accepts only its own configured CORS origin.
+Real PostgreSQL tests prove legacy history/flat-price/default-delivery preservation through migration six; SQL price/money/quantity constraints; flat and required authoritative pricing; required selection enforcement; mixed line totals/snapshots; delivery fee/contact/driver progression; addressless zero-fee pickup and driver exclusion; token tracking/cancellation; immutable history after catalog changes; standalone edit version invalidation; concurrent aggregate winner/409 loser; order versus variant repricing; referenced variant archiving and last-variant refusal; sold-out required saves. PostgreSQL credentials and HTTP/socket tokens from the other runtime are rejected. Each runtime accepts only its own configured CORS origin.
 
 Hub tests preserve created/updated/removed reconciliation, reconnect refresh, stale/late HTTP and mutation success/failure handling, duplicate-action protection, Kitchen gestures/keyboard/modes and browser-local preferences. New real component tests render historical mixed flat/required snapshots in Kitchen and Archive. Locale and business timezone are separate; DST/browser-zone regressions retain UTC instant identity. Archive presets retain rolling 24-hour duration semantics, with epoch all-time coverage; date-only API bounds use business-day boundaries.
 

@@ -28,18 +28,18 @@
 - [x] Align editor validation with backend sold-out REQUIRED contract; add regression coverage.
 - [x] Keep generic deployment values configurable; leave legitimate DUA fixtures intact and preserve all Kitchen/realtime tests.
 - [x] Run whole unit suite/typecheck/build/lint/format/diff checks and record results in the ledger.
-- [ ] Commit locally after owner coordination.
+- [x] Commit locally after owner coordination.
 
 ### Task 2: Independent local browser proof
 
 **Consumes:** Backend Task 3 synthetic APIs; same Hub source, two Vite configurations.
 
-- [ ] Run DUA-style identity/EUR/sq-XK/Europe-Belgrade and synthetic flat identity/EUR/en-GB/different business timezone against separate APIs/databases.
-- [ ] Verify login, Acceptance/Kitchen/Deliveries/Archive/Menu/Settings/Staff, flat/variant snapshots and pickup exclusion using synthetic data.
-- [ ] Check 1440px desktop, 768px tablet and 390px mobile without expanding the matrix unless an issue appears.
-- [ ] Verify reconnect/realtime updates, error/loading/empty recovery and all three device-local Kitchen modes.
-- [ ] Record pass/fail evidence and local review/start instructions; no push/deploy.
+- [x] Run DUA-style identity/EUR/sq-XK/Europe-Belgrade and synthetic flat identity/EUR/en-GB/different business timezone against separate APIs/databases.
+- [x] Verify login, Acceptance/Kitchen/Deliveries/Archive/Menu/Settings/Staff, flat/variant snapshots and pickup exclusion using synthetic data.
+- [x] Check 1440px desktop, 768px tablet and 390px mobile without expanding the matrix unless an issue appears.
+- [x] Verify reconnect/realtime updates, error/loading/empty recovery and all three device-local Kitchen modes.
+- [x] Record pass/fail evidence and local review/start instructions; no push/deploy.
 
 ### Task 3: Independent final review and owner handoff
 
-- [ ] Fresh read-only whole-branch review with spec/plan/diff/evidence, narrowly resolve material feedback, verify and report local HEAD/state.
+- [x] Fresh read-only whole-branch review with spec/plan/diff/evidence, narrowly resolve material feedback, verify and report local HEAD/state.
