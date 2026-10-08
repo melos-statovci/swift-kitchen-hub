@@ -1,0 +1,14 @@
+{
+  "backend": {
+    "repository": "PrivateDeveloping/swift-kitchen-backend",
+    "ref": "cb5fa9b280aeed4e5cdca0616d61373a8e791510"
+  },
+  "hub": {
+    "repository": "PrivateDeveloping/swift-kitchen-hub",
+    "ref": "178446ca879a46d5b825df116581ead2ccfddd25"
+  },
+  "storefront": {
+    "repository": "melos-statovci/dua-pizza-culinary-canvas",
+    "ref": "6db3124cfe6e5ccdfe4dceff9a964152c45ae22c"
+  }
+}

@@ -14,8 +14,13 @@
     "typecheck": "tsc --noEmit",
     "validate:dua": "node --env-file=.env.dua.local scripts/validate-dua-local.mjs",
     "lint": "eslint .",
-    "format:check": "prettier --check 'src/**/*.{ts,tsx,mjs,css}' 'scripts/**/*.mjs' vite.config.ts eslint.config.js",
-    "format": "prettier --write ."
+    "format:check": "prettier --check 'src/**/*.{ts,tsx,mjs,css}' 'scripts/**/*.mjs' vite.config.ts eslint.config.js docs/VERIFICATION-WORKFLOW.md package.json .github/verification.json .github/workflows/verification.yml .github/actions/verification-setup/action.yml",
+    "format": "prettier --write .",
+    "verify:quick": "node scripts/verify.mjs quick",
+    "verify:full": "node scripts/verify.mjs full",
+    "verify:ci": "node scripts/verify.mjs ci",
+    "verify:plan": "node scripts/verify.mjs full --plan",
+    "verify:runner": "node --test scripts/verification*.test.mjs"
   },
   "dependencies": {
     "@cloudflare/vite-plugin": "^1.25.5",

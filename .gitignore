@@ -34,3 +34,6 @@ dist-ssr
 .env
 .env.local
 .superpowers/
+
+# Local verification logs and concurrency lock
+.verification/

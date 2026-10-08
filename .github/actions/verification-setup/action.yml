@@ -1,0 +1,93 @@
+name: Verification setup
+description: Checkout pinned local-proof companions and install cached dependencies
+inputs:
+  component:
+    description: backend, hub, storefront or all
+    required: true
+  read-token:
+    description: Read-only access to the three private repositories; never persisted
+    required: false
+runs:
+  using: composite
+  steps:
+    - name: Require companion read access
+      if: inputs.component != env.CURRENT_COMPONENT
+      shell: bash
+      env:
+        READ_TOKEN: ${{ inputs.read-token }}
+      run: |
+        if [ -z "$READ_TOKEN" ]; then
+          printf '%s\n' 'Owner setup required: SWIFTKITCHEN_READ_TOKEN must have read-only contents access to the three companion repositories.' >&2
+          exit 1
+        fi
+    - name: Resolve reviewed companion commits
+      id: refs
+      shell: bash
+      working-directory: ${{ env.COORDINATOR }}
+      run: |
+        node --input-type=module - <<'JS'
+        import { readFileSync, appendFileSync } from 'node:fs';
+        const sources = JSON.parse(readFileSync('.github/verification.json'));
+        for (const [role, source] of Object.entries(sources)) {
+          if (!/^[a-f0-9]{40}$/.test(source.ref) || !/^[\w-]+\/[\w.-]+$/.test(source.repository)) throw Error('Invalid pinned companion identity');
+          appendFileSync(process.env.GITHUB_OUTPUT, `${role}-repository=${source.repository}\n${role}-ref=${source.ref}\n`);
+        }
+        JS
+    - uses: actions/checkout@v6
+      if: env.CURRENT_COMPONENT != 'backend' && (inputs.component == 'backend' || inputs.component == 'all')
+      with:
+        repository: ${{ steps.refs.outputs.backend-repository }}
+        ref: ${{ steps.refs.outputs.backend-ref }}
+        token: ${{ inputs.read-token }}
+        path: resilient-published-menu-backend
+        persist-credentials: false
+    - uses: actions/checkout@v6
+      if: env.CURRENT_COMPONENT != 'hub' && (inputs.component == 'hub' || inputs.component == 'all')
+      with:
+        repository: ${{ steps.refs.outputs.hub-repository }}
+        ref: ${{ steps.refs.outputs.hub-ref }}
+        token: ${{ inputs.read-token }}
+        path: resilient-published-menu-hub
+        persist-credentials: false
+    - uses: actions/checkout@v6
+      if: env.CURRENT_COMPONENT != 'storefront' && (inputs.component == 'storefront' || inputs.component == 'all')
+      with:
+        repository: ${{ steps.refs.outputs.storefront-repository }}
+        ref: ${{ steps.refs.outputs.storefront-ref }}
+        token: ${{ inputs.read-token }}
+        path: resilient-published-menu-storefront
+        persist-credentials: false
+    - uses: actions/setup-node@v6
+      with:
+        node-version: 24.8.0
+        cache: npm
+        cache-dependency-path: resilient-published-menu-*/package-lock.json
+        package-manager-cache: false
+    - name: Install only needed dependencies
+      shell: bash
+      env:
+        COMPONENT: ${{ inputs.component }}
+      run: |
+        mkdir -p "$COORDINATOR/.verification/logs/install"
+        for role in backend hub storefront; do
+          if [ "$COMPONENT" = all ] || [ "$COMPONENT" = "$role" ]; then
+            log="$COORDINATOR/.verification/logs/install/$role.log"
+            if npm ci --prefix "resilient-published-menu-$role" > "$log" 2>&1; then
+              printf 'Dependencies %s: PASS\n' "$role"
+            else
+              printf 'Dependencies %s: FAIL; log %s\n' "$role" "$log"
+              tail -n 20 "$log"
+              exit 1
+            fi
+          fi
+        done
+        if [ "$COMPONENT" = all ] || [ "$COMPONENT" = backend ]; then
+          log="$COORDINATOR/.verification/logs/install/prisma-generate.log"
+          if npm --prefix resilient-published-menu-backend run prisma:generate > "$log" 2>&1; then
+            printf '%s\n' 'Prisma client: PASS'
+          else
+            printf 'Prisma client: FAIL; log %s\n' "$log"
+            tail -n 20 "$log"
+            exit 1
+          fi
+        fi

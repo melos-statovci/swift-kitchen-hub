@@ -1,0 +1,175 @@
+name: SwiftKitchen verification
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+concurrency:
+  group: verification-${{ github.event.pull_request.head.repo.full_name || github.repository }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
+env:
+  CURRENT_COMPONENT: hub
+  COORDINATOR: resilient-published-menu-hub
+jobs:
+  changes:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      heavy: ${{ steps.scope.outputs.heavy }}
+      components: ${{ steps.scope.outputs.components }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: resilient-published-menu-hub
+          fetch-depth: 0
+          persist-credentials: false
+      - id: scope
+        working-directory: resilient-published-menu-hub
+        env:
+          REVIEW_BASE: ${{ github.event.pull_request.base.sha || github.event.before }}
+        run: node scripts/verification-changes.mjs
+  checks:
+    needs: changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    strategy:
+      fail-fast: false
+      matrix:
+        component: ${{ fromJSON(needs.changes.outputs.components) }}
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: resilient-published-menu-hub
+          persist-credentials: false
+      - uses: ./resilient-published-menu-hub/.github/actions/verification-setup
+        with:
+          component: ${{ matrix.component }}
+          read-token: ${{ secrets.SWIFTKITCHEN_READ_TOKEN }}
+      - name: Unit, types, lint, format and build
+        working-directory: resilient-published-menu-hub
+        env:
+          COMPONENT: ${{ matrix.component }}
+        run: node scripts/verify.mjs ci --component "$COMPONENT"
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: checks-${{ matrix.component }}
+          path: resilient-published-menu-hub/.verification/logs/
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: ignore
+  integration:
+    needs: [changes, checks]
+    if: needs.changes.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      dua-test:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proof_dua
+          POSTGRES_PASSWORD: dua-proof-local-password
+          POSTGRES_DB: swiftkitchen_shared_dua_test
+        ports: ["127.0.0.1:55441:5432"]
+        options: >-
+          --health-cmd "pg_isready -U proof_dua -d swiftkitchen_shared_dua_test"
+          --health-interval 2s --health-timeout 2s --health-retries 20
+      flat-test:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proof_flat
+          POSTGRES_PASSWORD: flat-proof-local-password
+          POSTGRES_DB: swiftkitchen_shared_flat_test
+        ports: ["127.0.0.1:55442:5432"]
+        options: >-
+          --health-cmd "pg_isready -U proof_flat -d swiftkitchen_shared_flat_test"
+          --health-interval 2s --health-timeout 2s --health-retries 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: resilient-published-menu-hub
+          persist-credentials: false
+      - uses: ./resilient-published-menu-hub/.github/actions/verification-setup
+        with:
+          component: backend
+          read-token: ${{ secrets.SWIFTKITCHEN_READ_TOKEN }}
+      - name: Guarded local proof
+        working-directory: resilient-published-menu-hub
+        run: node scripts/verify.mjs integration --workspace
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: integration
+          path: |
+            resilient-published-menu-hub/.verification/logs/
+            resilient-published-menu-storefront/.verification/logs/
+            resilient-published-menu-storefront/test-results/
+            resilient-published-menu-storefront/playwright-report/
+            resilient-published-menu-backend/.superpowers/resilient-proof/*.log
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: ignore
+  browser:
+    needs: [changes, checks]
+    if: needs.changes.outputs.heavy == 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      dua-test:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proof_dua
+          POSTGRES_PASSWORD: dua-proof-local-password
+          POSTGRES_DB: swiftkitchen_shared_dua_test
+        ports: ["127.0.0.1:55441:5432"]
+        options: >-
+          --health-cmd "pg_isready -U proof_dua -d swiftkitchen_shared_dua_test"
+          --health-interval 2s --health-timeout 2s --health-retries 20
+      flat-test:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: proof_flat
+          POSTGRES_PASSWORD: flat-proof-local-password
+          POSTGRES_DB: swiftkitchen_shared_flat_test
+        ports: ["127.0.0.1:55442:5432"]
+        options: >-
+          --health-cmd "pg_isready -U proof_flat -d swiftkitchen_shared_flat_test"
+          --health-interval 2s --health-timeout 2s --health-retries 20
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          path: resilient-published-menu-hub
+          persist-credentials: false
+      - uses: ./resilient-published-menu-hub/.github/actions/verification-setup
+        with:
+          component: all
+          read-token: ${{ secrets.SWIFTKITCHEN_READ_TOKEN }}
+      - name: Install browser used by the existing Playwright configuration
+        working-directory: resilient-published-menu-storefront
+        run: |
+          mkdir -p .verification/logs/install
+          log=.verification/logs/install/chrome.log
+          if npx --no-install playwright install --with-deps chrome > "$log" 2>&1; then
+            printf '%s\n' 'Chrome: PASS'
+          else
+            printf 'Chrome: FAIL; log %s\n' "$log"
+            tail -n 20 "$log"
+            exit 1
+          fi
+      - name: Guarded local proof
+        working-directory: resilient-published-menu-hub
+        run: node scripts/verify.mjs browser --workspace
+      - uses: actions/upload-artifact@v6
+        if: always()
+        with:
+          name: browser
+          path: |
+            resilient-published-menu-hub/.verification/logs/
+            resilient-published-menu-storefront/.verification/logs/
+            resilient-published-menu-storefront/test-results/
+            resilient-published-menu-storefront/playwright-report/
+            resilient-published-menu-backend/.superpowers/resilient-proof/*.log
+          include-hidden-files: true
+          retention-days: 7
+          if-no-files-found: ignore
