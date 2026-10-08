@@ -10,7 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { RequireRole } from "@/components/RequireRole";
 import { useSettings, type DayKey, type SettingsPatch } from "@/hooks/useSettings";
 import { ApiError, NetworkError } from "@/lib/api";
-import { isValidHoursPair } from "@/lib/schedule";
+import { isLikelyMissedOvernight, isValidHoursPair } from "@/lib/schedule";
 import { appConfig } from "@/lib/config";
 import { getSettingsPresentation } from "@/lib/settingsPresentation";
 import { KitchenInteractionSettings } from "@/components/kitchen/KitchenInteractionSettings";
@@ -277,6 +277,7 @@ function RestaurantSettingsForm() {
                 const h = form.hours[key];
                 const overnight =
                   !h.closed && isValidHoursPair(h.open, h.close) && h.close < h.open;
+                const missedOvernight = !h.closed && isLikelyMissedOvernight(h.open, h.close);
                 return (
                   <div
                     key={key}
@@ -320,7 +321,13 @@ function RestaurantSettingsForm() {
                         disabled={h.closed}
                         onChange={(e) => setHour(key, "close", e.target.value)}
                         className="min-w-0 w-full font-mono"
-                        aria-describedby={overnight ? `${key}-overnight` : undefined}
+                        aria-describedby={
+                          overnight
+                            ? `${key}-overnight`
+                            : missedOvernight
+                              ? `${key}-missed-overnight`
+                              : undefined
+                        }
                       />
                       {overnight && (
                         <p
@@ -328,6 +335,16 @@ function RestaurantSettingsForm() {
                           className="text-xs font-medium text-muted-foreground"
                         >
                           Next day
+                        </p>
+                      )}
+                      {missedOvernight && (
+                        <p
+                          id={`${key}-missed-overnight`}
+                          className="text-xs font-medium text-amber-700 dark:text-amber-400"
+                        >
+                          Opening at midnight means this day is open only until {h.close} in the
+                          morning. To stay open until {h.close} tonight, set Opening to when you
+                          actually open.
                         </p>
                       )}
                     </div>

@@ -32,6 +32,7 @@ import {
 } from "@/hooks/useMenuItems";
 import { useCategories } from "@/hooks/useCategories";
 import { formatCurrency } from "@/lib/format";
+import { hiddenForNoOrderableVariant } from "@/lib/menuPricing";
 import type { MenuItem } from "@/lib/types";
 
 export const Route = createFileRoute("/_authenticated/menu")({
@@ -233,6 +234,15 @@ function MenuDashboard() {
                           {item.variantMode === "REQUIRED"
                             ? `${item.variants.length} variant${item.variants.length === 1 ? "" : "s"}`
                             : formatCurrency(item.price ?? 0)}
+                          {item.available && hiddenForNoOrderableVariant(item) && (
+                            <Badge
+                              variant="destructive"
+                              className="ml-2"
+                              title="Customers can't see this item until at least one variant is available."
+                            >
+                              Hidden from customers
+                            </Badge>
+                          )}
                         </TableCell>
                         <TableCell className="text-center">
                           <Switch
