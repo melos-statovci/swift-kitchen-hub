@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { ChevronDown, ChevronUp, Check, Pencil, Plus, Trash2, X } from "lucide-react";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
@@ -22,6 +22,8 @@ export function CategoryManager({
   onMove,
   onDelete,
 }: Props) {
+  const [moving, setMoving] = useState(false);
+  const movingRef = useRef(false);
   const [newName, setNewName] = useState("");
   const [adding, setAdding] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -62,10 +64,16 @@ export function CategoryManager({
   };
 
   const handleMove = async (id: string, dir: "up" | "down") => {
+    if (movingRef.current) return;
+    movingRef.current = true;
+    setMoving(true);
     try {
       await onMove(id, dir);
     } catch (err) {
       toast.error(err instanceof Error ? err.message : "Failed to reorder");
+    } finally {
+      movingRef.current = false;
+      setMoving(false);
     }
   };
 
@@ -82,6 +90,7 @@ export function CategoryManager({
     <div className="space-y-4">
       <div className="flex gap-2">
         <Input
+          disabled={moving}
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           onKeyDown={(e) => e.key === "Enter" && handleAdd()}
@@ -89,7 +98,7 @@ export function CategoryManager({
           className="max-w-xs"
           aria-label="New category name"
         />
-        <Button onClick={handleAdd} disabled={adding || !newName.trim()}>
+        <Button onClick={handleAdd} disabled={moving || adding || !newName.trim()}>
           <Plus className="h-4 w-4" />
           Add category
         </Button>
@@ -105,7 +114,7 @@ export function CategoryManager({
                 <button
                   type="button"
                   onClick={() => handleMove(c.id, "up")}
-                  disabled={i === 0}
+                  disabled={moving || i === 0}
                   aria-label={`Move ${c.name} up`}
                   className="text-muted-foreground hover:text-foreground disabled:opacity-30"
                 >
@@ -114,7 +123,7 @@ export function CategoryManager({
                 <button
                   type="button"
                   onClick={() => handleMove(c.id, "down")}
-                  disabled={i === categories.length - 1}
+                  disabled={moving || i === categories.length - 1}
                   aria-label={`Move ${c.name} down`}
                   className="text-muted-foreground hover:text-foreground disabled:opacity-30"
                 >
@@ -126,6 +135,7 @@ export function CategoryManager({
                 {isEditing ? (
                   <div className="flex items-center gap-2">
                     <Input
+                      disabled={moving}
                       value={draft}
                       onChange={(e) => setDraft(e.target.value)}
                       onKeyDown={(e) => {
@@ -140,6 +150,7 @@ export function CategoryManager({
                       size="icon"
                       variant="ghost"
                       className="h-8 w-8"
+                      disabled={moving}
                       onClick={() => saveEdit(c)}
                     >
                       <Check className="h-4 w-4" />
@@ -169,6 +180,7 @@ export function CategoryManager({
                     size="icon"
                     variant="ghost"
                     className="h-8 w-8"
+                    disabled={moving}
                     onClick={() => startEdit(c)}
                     aria-label={`Rename ${c.name}`}
                   >
@@ -179,7 +191,7 @@ export function CategoryManager({
                     variant="ghost"
                     className="h-8 w-8 text-destructive hover:text-destructive"
                     onClick={() => handleDelete(c)}
-                    disabled={count > 0}
+                    disabled={moving || count > 0}
                     title={
                       count > 0 ? "Move its items to another category first" : "Remove category"
                     }

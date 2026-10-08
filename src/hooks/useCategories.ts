@@ -1,16 +1,21 @@
-import { useCallback, useEffect, useMemo, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import type { Category } from "@/lib/types";
 import { apiFetch, ApiError, NetworkError } from "@/lib/api";
+
+import { createCategoryMover, sortCategories } from "@/lib/categoryOrder";
 
 type CategoriesResponse = { categories: Category[] };
 type CategoryResponse = { category: Category };
 
 /**
  * Admin category management. The list is the public ordered set; mutations hit
- * the admin endpoints. Reorder is done by swapping sortOrder with a neighbor.
+ * the admin endpoints. Reorder uses one complete atomic backend operation.
  */
 export function useCategories() {
   const [categories, setCategories] = useState<Category[]>([]);
+  const [reorderPending, setReorderPending] = useState(false);
+  const categoriesRef = useRef(categories);
+  categoriesRef.current = categories;
   const [loading, setLoading] = useState<boolean>(true);
   const [loadError, setLoadError] = useState<string | null>(null);
   const [loadVersion, setLoadVersion] = useState(0);
@@ -42,10 +47,7 @@ export function useCategories() {
     };
   }, [loadVersion]);
 
-  const sorted = useMemo(
-    () => [...categories].sort((a, b) => a.sortOrder - b.sortOrder),
-    [categories],
-  );
+  const sorted = useMemo(() => sortCategories(categories), [categories]);
 
   const createCategory = useCallback(async (name: string): Promise<Category> => {
     const data = await apiFetch<CategoryResponse>("/api/categories", {
@@ -72,54 +74,21 @@ export function useCategories() {
     setCategories((prev) => prev.filter((c) => c.id !== id));
   }, []);
 
-  // Swap a category's order with its up/down neighbour (persists both).
-  const moveCategory = useCallback(
-    async (id: string, direction: "up" | "down"): Promise<void> => {
-      const ordered = [...categories].sort((a, b) => a.sortOrder - b.sortOrder);
-      const idx = ordered.findIndex((c) => c.id === id);
-      const swapIdx = direction === "up" ? idx - 1 : idx + 1;
-      if (idx < 0 || swapIdx < 0 || swapIdx >= ordered.length) return;
-
-      const a = ordered[idx];
-      const b = ordered[swapIdx];
-      // Optimistic swap.
-      setCategories((prev) =>
-        prev.map((c) =>
-          c.id === a.id
-            ? { ...c, sortOrder: b.sortOrder }
-            : c.id === b.id
-              ? { ...c, sortOrder: a.sortOrder }
-              : c,
-        ),
-      );
-      try {
-        await Promise.all([
-          apiFetch(`/api/categories/${a.id}`, {
+  const moveCategory = useMemo(
+    () =>
+      createCategoryMover({
+        read: () => categoriesRef.current,
+        apply: setCategories,
+        pending: setReorderPending,
+        request: (body) =>
+          apiFetch<CategoriesResponse>("/api/categories/order", {
             method: "PATCH",
             auth: true,
-            body: { sortOrder: b.sortOrder },
+            body,
           }),
-          apiFetch(`/api/categories/${b.id}`, {
-            method: "PATCH",
-            auth: true,
-            body: { sortOrder: a.sortOrder },
-          }),
-        ]);
-      } catch (err) {
-        // Roll back on failure.
-        setCategories((prev) =>
-          prev.map((c) =>
-            c.id === a.id
-              ? { ...c, sortOrder: a.sortOrder }
-              : c.id === b.id
-                ? { ...c, sortOrder: b.sortOrder }
-                : c,
-          ),
-        );
-        throw err;
-      }
-    },
-    [categories],
+        reload: () => apiFetch<CategoriesResponse>("/api/categories"),
+      }),
+    [],
   );
 
   return {
@@ -131,5 +100,6 @@ export function useCategories() {
     renameCategory,
     deleteCategory,
     moveCategory,
+    reorderPending,
   };
 }
